@@ -1,12 +1,27 @@
+<img src="fx-banner.png" alt="FX / Currency Converter"/>
+
 # currency-converter
 
-A small currency converter web app with near-real-time FX rates. You can install it as a PWA.
+A small currency converter web app with near-real-time FX rates and history charts. You can install it as a PWA (an app-like install from the browser).
+
+## ✨ Features
+
+- 🔢 **Calculator input:** amount fields accept simple calculations (`+ − × ÷` and parentheses, e.g. `120×3+15`). They are entered with a built-in keypad instead of the device keyboard (a physical keyboard also works on desktop).
+- 📈 **Rate charts:** tap a currency's flag or name to see how 1 unit of your base currency has moved (1D, 1W, 1M, 3M, 1Y). Drag across the chart to read a value at any time. Tap outside the chart to close it.
+- 📋 **Copy a value:** long-press an amount to copy it as a plain number.
+- ↕️ **Your list, your order:** add and remove currencies, and drag the ☰ handle in edit mode to reorder them.
+- 🌐 **English and 繁體中文:** the language follows your system, and you can switch it with the 🌐 button.
+- 🌗 **Themes:** light, dark or follow the system.
+- 📴 **Works offline:** preferences are stored in `localStorage` and the last rates are cached, so the app still opens without a connection.
+
+## 🧱 How it works
 
 - **Backend:** Python / FastAPI. It caches rates in memory and refreshes them in the background *before* the cache expires.
 - **Rates:** [Yahoo Finance](https://finance.yahoo.com) quotes (`XXX=X` pairs) are the primary source. For any currency Yahoo doesn't return, the app falls back to the free [ExchangeRate-API open endpoint](https://www.exchangerate-api.com/docs/free) (no key needed). If both fail, it keeps serving the last good rates.
-- **Frontend:** plain HTML/CSS/JS with no build step. You can add, remove and reorder currencies and pick a light, dark or system theme. Amount fields accept simple calculations (`+ − × ÷` and parentheses, e.g. `120×3+15`); they are entered with a built-in calculator keypad instead of the device keyboard (a physical keyboard also works on desktop). Preferences are stored in `localStorage`, and the last rates are cached so the app also opens offline.
+- **History:** stored in a local SQLite database (see [Chart history](#-chart-history)).
+- **Frontend:** plain HTML/CSS/JS with no build step.
 
-## Run locally (debug)
+## 🚀 Run locally (debug)
 
 ```bash
 ./start.sh                 # http://localhost:8000, auto-reload
@@ -22,14 +37,16 @@ Run the tests:
 node --test tests/              # calculator (static/calc.js)
 ```
 
-## Docker
+## 🐳 Docker
 
 ```bash
 docker compose up -d --build
 # or: CACHE_TTL_SECONDS=900 PORT=8080 docker compose up -d --build
 ```
 
-## Configuration
+The chart history is kept in a Docker **named volume** (`fx-data`, mounted at `/data`). It is managed by Docker, so you won't see a folder in the project, and it survives rebuilds and `docker compose down`. `docker compose down -v` deletes it, and the history is then fetched again from Yahoo on the next start.
+
+## ⚙️ Configuration
 
 | Env var | Default | Meaning |
 | --- | --- | --- |
@@ -40,23 +57,24 @@ docker compose up -d --build
 | `PORT` | `8000` | HTTP port. |
 | `BASE_PATH` | *(empty)* | Optional sub-path such as `/fx`. Only needed if your proxy forwards `/fx/...` **without** stripping the prefix. The app keeps serving `/` either way. |
 
-Run a single uvicorn worker, so there is one shared cache and refresher.
+> ⚠️ Run a single uvicorn worker, so there is one shared cache and refresher.
 
-### Chart history
+## 📊 Chart history
 
-`/api/history` is served from a local SQLite database, not fetched per request. Only the USD legs
-(45 currencies) are stored, at 5-minute, 30-minute and daily resolution, and any pair is computed
-as `usd_quote / usd_base`. A background task refreshes each resolution; every refresh requests
-everything since the newest stored bar, so after downtime the next refresh backfills the outage
-(as far back as 4 days of 5-minute, 14 days of 30-minute and 370 days of daily data).
+`/api/history` is served from a local SQLite database, not fetched per request.
 
-## API
+- **What is stored:** only the USD legs (45 currencies), at 5-minute, 30-minute and daily resolution. Any pair is computed as `usd_quote / usd_base`.
+- **Refreshing:** a background task refreshes each resolution. Every refresh requests everything since the newest stored bar, so after downtime the next refresh backfills the outage (as far back as 4 days of 5-minute, 14 days of 30-minute and 370 days of daily data).
+- **Quiet currencies:** some currencies (e.g. PHP, VND) have long stretches with no Yahoo quotes. For pairs between two non-USD currencies, a currency's last quote is reused for up to 12 hours (4 days on the daily chart), so the line stays continuous. Real market closures, such as weekends, still show as gaps.
+
+## 🔌 API
 
 - `GET /api/rates`: rates expressed as units per 1 USD, plus where each rate came from, `updated_at`, `expires_at` and `stale`.
 - `GET /api/currencies`: the supported currencies and the default selection.
+- `GET /api/history?base=USD&quote=JPY&range=1m`: chart points as `[unix_time, rate]` pairs. `range` is one of `1d`, `1w`, `1m`, `3m`, `1y`. It returns 400 for an unknown currency or range, and 503 when no history is available.
 - `GET /healthz`: health check.
 
-## Hosting under a sub-path (e.g. `https://example.com/fx/`)
+## 🌍 Hosting under a sub-path (e.g. `https://example.com/fx/`)
 
 The frontend uses only relative URLs, so the same build works at `http://<ip>:8000/` and behind a proxy at `/fx/`.
 
@@ -75,8 +93,8 @@ If your proxy forwards the path unchanged (e.g. Traefik without `stripprefix`), 
 
 The URL must end with a slash (`/fx/`) because relative URLs resolve against it.
 
-## PWA
+## 📱 PWA
 
 Browsers only allow installing a PWA from `localhost` or over **HTTPS**. In production, put the app behind a TLS-terminating reverse proxy (Caddy, nginx, Traefik, …).
 
-The server stamps `styles.css`, `calc.js` and `app.js` in `index.html` with a content-hash version (`?v=…`), so browsers load changed files automatically. Bump `VERSION` in `static/sw.js` only when you want installed clients to drop their old offline caches. To regenerate the icons, run `python scripts/generate_icons.py` (needs Pillow).
+The server stamps `styles.css`, `calc.js`, `i18n.js` and `app.js` in `index.html` with a content-hash version (`?v=…`), so browsers load changed files automatically. Bump `VERSION` in `static/sw.js` only when you want installed clients to drop their old offline caches. To regenerate the icons, run `python scripts/generate_icons.py` (needs Pillow).
