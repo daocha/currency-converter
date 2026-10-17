@@ -1,0 +1,16 @@
+services:
+  currency-converter:
+    build: .
+    image: currency-converter:latest
+    container_name: currency-converter
+    ports:
+      - "${PORT:-8000}:8000"
+    environment:
+      # Cache lifetime in seconds (300 = 5 min, 900 = 15 min).
+      CACHE_TTL_SECONDS: "${CACHE_TTL_SECONDS:-300}"
+      # Optional: how many seconds before expiry to refresh (default: 20% of TTL, max 60s).
+      # REFRESH_MARGIN_SECONDS: "60"
+      LOG_LEVEL: "${LOG_LEVEL:-warning}"
+      # Only needed if your reverse proxy forwards /fx/... without stripping the prefix.
+      BASE_PATH: "${BASE_PATH:-}"
+    restart: unless-stopped
