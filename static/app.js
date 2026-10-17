@@ -20,7 +20,6 @@ const refreshBtn = $("#refresh-btn");
 const keypad = $("#keypad");
 const keypadTarget = $("#keypad-target");
 const keypadPreview = $("#keypad-preview");
-const keypadToggle = $("#keypad-toggle");
 const ptrEl = $("#ptr");
 
 let currencies = {};       // code -> name
@@ -135,7 +134,6 @@ function renderList() {
     const input = row.querySelector(".amount");
     input.setAttribute("aria-label", `Amount in ${code}`);
     input.addEventListener("input", () => onAmountInput(code, input));
-    input.inputMode = keypadEnabled() ? "none" : "decimal";
     input.addEventListener("focus", () => onAmountFocus(input));
     input.addEventListener("blur", onAmountBlur);
     input.addEventListener("keydown", (e) => {
@@ -247,22 +245,9 @@ function commitAmount(code, input) {
 
 // ---------- calculator keypad ----------
 
-const coarsePointer = matchMedia("(pointer: coarse)");
+// Amounts are always entered with this keypad (inputmode="none" keeps the device keyboard closed);
+// a physical keyboard still works on desktop.
 let activeInput = null;  // the amount field being edited
-
-// On by default on touch screens; the toolbar toggle overrides it (saved in prefs).
-function keypadEnabled() {
-  return prefs.keypad ?? coarsePointer.matches;
-}
-
-function applyKeypadMode() {
-  const on = keypadEnabled();
-  keypadToggle.setAttribute("aria-pressed", String(on));
-  // "none" keeps the caret but stops the system keyboard from opening.
-  for (const input of listEl.querySelectorAll(".amount")) input.inputMode = on ? "none" : "decimal";
-  if (!on) hideKeypad();
-  else if (activeInput) showKeypad();
-}
 
 function showKeypad() {
   keypad.hidden = false;
@@ -296,7 +281,7 @@ function updateKeypadHead() {
 function onAmountFocus(input) {
   activeInput = input;
   input.select();
-  if (keypadEnabled()) showKeypad();
+  showKeypad();
 }
 
 function onAmountBlur(e) {
@@ -377,12 +362,6 @@ function setupKeypad() {
     if (btn) pressKey(btn);
   });
 
-  keypadToggle.addEventListener("click", () => {
-    prefs.keypad = !keypadEnabled();
-    savePrefs();
-    applyKeypadMode();
-  });
-  coarsePointer.addEventListener("change", applyKeypadMode);
   document.addEventListener("keydown", (e) => {
     if (e.key === "Escape" && activeInput) activeInput.blur();
   });
@@ -601,6 +580,7 @@ async function init() {
   prefs.currencies = prefs.currencies.filter((c) => c in currencies);
   if (!prefs.currencies.includes(prefs.baseCode)) prefs.baseCode = prefs.currencies[0];
   if (prefs.baseAmount === undefined) prefs.baseAmount = 100;
+  delete prefs.keypad; // obsolete: the keypad used to be optional
   savePrefs();
 
   renderList();
@@ -628,7 +608,6 @@ async function init() {
   refreshBtn.addEventListener("click", refreshRates);
   setupPullToRefresh();
   setupKeypad();
-  applyKeypadMode();
   window.addEventListener("offline", renderStatus);
   setInterval(renderStatus, 30_000);
 

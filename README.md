@@ -4,7 +4,7 @@ A small currency converter web app with near-real-time FX rates. You can install
 
 - **Backend:** Python / FastAPI. It caches rates in memory and refreshes them in the background *before* the cache expires.
 - **Rates:** [Yahoo Finance](https://finance.yahoo.com) quotes (`XXX=X` pairs) are the primary source. For any currency Yahoo doesn't return, the app falls back to the free [ExchangeRate-API open endpoint](https://www.exchangerate-api.com/docs/free) (no key needed). If both fail, it keeps serving the last good rates.
-- **Frontend:** plain HTML/CSS/JS with no build step. You can add, remove and reorder currencies and pick a light, dark or system theme. Amount fields accept simple calculations (`+ − × ÷` and parentheses, e.g. `120×3+15`); on touch screens a built-in calculator keypad replaces the system keyboard (toggle it with the keypad button in the toolbar, e.g. to use it with a mouse on desktop). Preferences are stored in `localStorage`, and the last rates are cached so the app also opens offline.
+- **Frontend:** plain HTML/CSS/JS with no build step. You can add, remove and reorder currencies and pick a light, dark or system theme. Amount fields accept simple calculations (`+ − × ÷` and parentheses, e.g. `120×3+15`); they are entered with a built-in calculator keypad instead of the device keyboard (a physical keyboard also works on desktop). Preferences are stored in `localStorage`, and the last rates are cached so the app also opens offline.
 
 ## Run locally (debug)
 
