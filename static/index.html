@@ -12,8 +12,11 @@
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="default">
   <script>
-    // Apply the saved theme before first paint to avoid a flash.
+    // Apply the saved theme before first paint to avoid a flash, and hide the content until
+    // app.js has rendered the currency list (with a safety timeout in case it fails to load).
     (function () {
+      document.documentElement.classList.add("booting");
+      setTimeout(function () { document.documentElement.classList.remove("booting"); }, 3000);
       try {
         var t = JSON.parse(localStorage.getItem("cc.prefs") || "{}").theme || "system";
         if (t === "system") t = matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
