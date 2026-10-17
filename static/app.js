@@ -536,17 +536,10 @@ function showToast(text) {
   toastTimer = setTimeout(() => (toastEl.hidden = true), 1800);
 }
 
-// navigator.clipboard needs a secure context (https or localhost); this app is often opened over
-// plain http on a LAN address, so fall back to a temporary textarea and execCommand.
+// Copies synchronously with a temporary textarea + execCommand first: it needs no permission, so there
+// is no prompt (the async Clipboard API can show one, and then fails or hangs while it is unanswered),
+// and it also works over plain http. The Clipboard API is only the fallback.
 async function copyText(text) {
-  try {
-    if (navigator.clipboard && window.isSecureContext) {
-      await navigator.clipboard.writeText(text);
-      return true;
-    }
-  } catch {
-    /* fall through to the legacy path */
-  }
   const ta = document.createElement("textarea");
   ta.value = text;
   ta.readOnly = true;
@@ -562,7 +555,18 @@ async function copyText(text) {
     ok = false;
   }
   ta.remove();
-  return ok;
+  if (ok) return true;
+  if (!(navigator.clipboard && window.isSecureContext)) return false;
+  try {
+    // Don't wait forever on an unanswered permission prompt.
+    await Promise.race([
+      navigator.clipboard.writeText(text),
+      new Promise((_, reject) => setTimeout(reject, 2000)),
+    ]);
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 // Plain number for pasting elsewhere: no thousands separators.
@@ -572,37 +576,59 @@ function plainAmount(value, code) {
   return new Intl.NumberFormat("en-US", { ...digits, useGrouping: false }).format(value);
 }
 
-async function copyRowValue(row) {
+// Copies the row's amount; resolves to true on success, false on failure, null if there is nothing to copy.
+async function copyRowValue(row, toastOnFailure = true) {
   const code = row.dataset.code;
   const value = code === prefs.baseCode ? prefs.baseAmount : convert(prefs.baseAmount, prefs.baseCode, code);
   const text = plainAmount(value, code);
-  if (!text) return;
-  showToast((await copyText(text)) ? t("copied", { value: `${text} ${code}` }) : t("copyFailed"));
+  if (!text) return null;
+  const ok = await copyText(text);
+  if (ok) showToast(t("copied", { value: `${text} ${code}` }));
+  else if (toastOnFailure) showToast(t("copyFailed"));
+  return ok;
 }
 
+// Browsers only allow copying shortly after a user action. A touch press (pointerdown) does not count as
+// one, only lifting the finger does, so a copy fired from the 500 ms timer fails unless the user happened to
+// interact within the last few seconds (typically the first copy after a page load). So the timer only
+// "arms" the press and tries once; the release then copies if that attempt didn't succeed.
 function setupCopy() {
   let timer = null;
+  let armedRow = null;   // the row whose press has lasted long enough
+  let copied = false;
   let startX = 0;
   let startY = 0;
-  const cancel = () => clearTimeout(timer);
+  const cancelTimer = () => clearTimeout(timer);
 
   listEl.addEventListener("pointerdown", (e) => {
     const row = e.target.closest(".row");
     if (editing || !row || !e.target.closest(".value") || e.button > 0) return;
     startX = e.clientX;
     startY = e.clientY;
-    cancel();
-    timer = setTimeout(() => {
+    armedRow = null;
+    cancelTimer();
+    timer = setTimeout(async () => {
+      armedRow = row;
+      copied = false;
       lastLongPress = Date.now();
       if (navigator.vibrate) navigator.vibrate(15);
-      copyRowValue(row);
+      copied = (await copyRowValue(row, false)) !== false; // a failure is reported only after the release attempt
     }, LONG_PRESS_MS);
   });
   listEl.addEventListener("pointermove", (e) => {
-    if (Math.hypot(e.clientX - startX, e.clientY - startY) > 8) cancel(); // scrolling, not pressing
+    if (!armedRow && Math.hypot(e.clientX - startX, e.clientY - startY) > 8) cancelTimer(); // scrolling
   });
-  for (const type of ["pointerup", "pointercancel", "pointerleave"]) listEl.addEventListener(type, cancel);
-  window.addEventListener("scroll", cancel, { passive: true });
+  const release = async () => {
+    cancelTimer();
+    const row = armedRow;
+    armedRow = null;
+    if (!row) return;
+    lastLongPress = Date.now();
+    if (!copied) await copyRowValue(row);
+  };
+  for (const type of ["pointerup", "pointercancel"]) listEl.addEventListener(type, release);
+  listEl.addEventListener("pointerleave", () => { if (!armedRow) cancelTimer(); });
+  window.addEventListener("scroll", () => { if (!armedRow) cancelTimer(); }, { passive: true });
   // Long-press opens the browser's text menu on touch devices; we use it for copying instead.
   listEl.addEventListener("contextmenu", (e) => {
     if (e.target.closest(".value")) e.preventDefault();
