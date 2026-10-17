@@ -146,12 +146,7 @@ function renderList() {
       }
     });
 
-    const up = row.querySelector(".up");
-    const down = row.querySelector(".down");
-    up.disabled = idx === 0;
-    down.disabled = idx === prefs.currencies.length - 1;
-    up.addEventListener("click", () => moveCurrency(idx, -1));
-    down.addEventListener("click", () => moveCurrency(idx, 1));
+    setupReorder(row.querySelector(".handle"), row, idx);
     row.querySelector(".remove").addEventListener("click", () => removeCurrency(code));
     // Tapping anywhere on a row edits its amount.
     row.addEventListener("click", (e) => {
@@ -387,6 +382,61 @@ function setupKeypad() {
   });
 }
 
+// Drag a row by its handle (pointer events, so it works with touch and mouse); arrow keys on the
+// focused handle move it one step. The row follows the pointer and the others shift out of its way.
+function setupReorder(handle, row, idx) {
+  handle.addEventListener("keydown", (e) => {
+    if (e.key !== "ArrowUp" && e.key !== "ArrowDown") return;
+    e.preventDefault();
+    moveCurrency(idx, e.key === "ArrowUp" ? -1 : 1);
+    listEl.querySelectorAll(".handle")[Math.max(0, Math.min(prefs.currencies.length - 1, idx + (e.key === "ArrowUp" ? -1 : 1)))]?.focus();
+  });
+
+  handle.addEventListener("pointerdown", (e) => {
+    if (e.button > 0) return;
+    e.preventDefault();
+    handle.setPointerCapture(e.pointerId);
+    // The DOM is left untouched while dragging (re-parenting the row would drop the pointer capture
+    // and freeze a fast drag); rows are only shifted with transforms and re-rendered on release.
+    const rows = [...listEl.querySelectorAll(".row")];
+    const from = rows.indexOf(row);
+    const tops = rows.map((r) => r.getBoundingClientRect().top);
+    const step = rows.length > 1 ? tops[1] - tops[0] : row.offsetHeight; // row height incl. border
+    const startY = e.clientY;
+    let target = from;
+    row.classList.add("dragging");
+    rows.forEach((r) => r !== row && r.classList.add("shifting"));
+
+    const onMove = (ev) => {
+      // Keep the dragged row inside the list, however fast the pointer moves.
+      const dy = Math.max(-from * step, Math.min((rows.length - 1 - from) * step, ev.clientY - startY));
+      row.style.transform = `translateY(${dy}px)`;
+      target = Math.max(0, Math.min(rows.length - 1, Math.round(from + dy / step)));
+      rows.forEach((r, i) => {
+        if (r === row) return;
+        const shift = from < target && i > from && i <= target ? -step : from > target && i >= target && i < from ? step : 0;
+        r.style.transform = shift ? `translateY(${shift}px)` : "";
+      });
+    };
+    const onEnd = () => {
+      handle.removeEventListener("pointermove", onMove);
+      handle.removeEventListener("pointerup", onEnd);
+      handle.removeEventListener("pointercancel", onEnd);
+      handle.removeEventListener("lostpointercapture", onEnd);
+      if (target !== from) {
+        const [moved] = prefs.currencies.splice(from, 1);
+        prefs.currencies.splice(target, 0, moved);
+        savePrefs();
+      }
+      renderList();
+    };
+    handle.addEventListener("pointermove", onMove);
+    handle.addEventListener("pointerup", onEnd);
+    handle.addEventListener("pointercancel", onEnd);
+    handle.addEventListener("lostpointercapture", onEnd);
+  });
+}
+
 function moveCurrency(idx, delta) {
   const list = prefs.currencies;
   const target = idx + delta;
@@ -578,7 +628,7 @@ function setupPullToRefresh() {
 
   window.addEventListener("touchstart", (e) => {
     if (window.scrollY > 0 || picker.open || e.touches.length !== 1 || ptrEl.classList.contains("refreshing")) return;
-    if (e.target.closest("#keypad")) return;
+    if (e.target.closest("#keypad, .handle")) return; // dragging a row must not pull to refresh
     startY = e.touches[0].clientY;
     pull = 0;
   }, { passive: true });

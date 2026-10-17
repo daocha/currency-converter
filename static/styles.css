@@ -229,6 +229,10 @@ select {
 .icon-btn:hover { background: var(--surface-2); }
 .icon-btn:disabled { opacity: 0.35; cursor: default; }
 .icon-btn.remove { color: var(--danger); }
+.icon-btn.handle { cursor: grab; touch-action: none; } /* touch-action: stop the page scrolling while dragging */
+.row.dragging { position: relative; z-index: 2; background: var(--surface-2); box-shadow: var(--shadow); cursor: grabbing; }
+.row.dragging .handle { cursor: grabbing; }
+.row.shifting { transition: transform 0.15s ease; }
 
 
 .row:not(.editing .row) { cursor: text; }
