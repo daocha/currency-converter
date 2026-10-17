@@ -36,10 +36,19 @@ docker compose up -d --build
 | `CACHE_TTL_SECONDS` | `300` | How long fetched rates stay valid (e.g. 300 = 5 min, 900 = 15 min). |
 | `REFRESH_MARGIN_SECONDS` | 20% of TTL, max 60 | How many seconds before expiry the background task refetches. |
 | `LOG_LEVEL` | `warning` | Log verbosity. Only errors and failed sources are logged by default; set `debug` to see each refresh. HTTP access logs are disabled. |
+| `HISTORY_DB` | `data/history.db` (`/data/history.db` in Docker) | SQLite file holding the stored FX history used by the charts. Mount a volume on its directory. |
 | `PORT` | `8000` | HTTP port. |
 | `BASE_PATH` | *(empty)* | Optional sub-path such as `/fx`. Only needed if your proxy forwards `/fx/...` **without** stripping the prefix. The app keeps serving `/` either way. |
 
 Run a single uvicorn worker, so there is one shared cache and refresher.
+
+### Chart history
+
+`/api/history` is served from a local SQLite database, not fetched per request. Only the USD legs
+(45 currencies) are stored, at 5-minute, 30-minute and daily resolution, and any pair is computed
+as `usd_quote / usd_base`. A background task refreshes each resolution; every refresh requests
+everything since the newest stored bar, so after downtime the next refresh backfills the outage
+(as far back as 4 days of 5-minute, 14 days of 30-minute and 370 days of daily data).
 
 ## API
 

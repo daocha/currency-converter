@@ -23,6 +23,8 @@ const keypad = $("#keypad");
 const keypadTarget = $("#keypad-target");
 const keypadPreview = $("#keypad-preview");
 const ptrEl = $("#ptr");
+const chartDialog = $("#chart");
+const toastEl = $("#toast");
 
 let currencies = {};       // code -> name
 let ratesData = null;      // last /api/rates payload
@@ -146,15 +148,15 @@ function renderList() {
       }
     });
 
-    const up = row.querySelector(".up");
-    const down = row.querySelector(".down");
-    up.disabled = idx === 0;
-    down.disabled = idx === prefs.currencies.length - 1;
-    up.addEventListener("click", () => moveCurrency(idx, -1));
-    down.addEventListener("click", () => moveCurrency(idx, 1));
+    setupReorder(row.querySelector(".handle"), row, idx);
     row.querySelector(".remove").addEventListener("click", () => removeCurrency(code));
     // Tapping anywhere on a row edits its amount.
     row.addEventListener("click", (e) => {
+      // The flag and name open the rate chart (base -> this currency); the base row has no pair to chart.
+      if (!editing && code !== prefs.baseCode && e.target.closest(".flag, .meta")) {
+        openChart(prefs.baseCode, code);
+        return;
+      }
       if (editing || input.disabled || e.target === input || e.target.closest(".edit-controls")) return;
       input.focus();
     });
@@ -282,6 +284,10 @@ function updateKeypadHead() {
 }
 
 function onAmountFocus(input) {
+  if (Date.now() - lastLongPress < 800) { // the press copied the value; don't also start editing
+    input.blur();
+    return;
+  }
   activeInput = input;
   input.select();
   showKeypad();
@@ -387,6 +393,61 @@ function setupKeypad() {
   });
 }
 
+// Drag a row by its handle (pointer events, so it works with touch and mouse); arrow keys on the
+// focused handle move it one step. The row follows the pointer and the others shift out of its way.
+function setupReorder(handle, row, idx) {
+  handle.addEventListener("keydown", (e) => {
+    if (e.key !== "ArrowUp" && e.key !== "ArrowDown") return;
+    e.preventDefault();
+    moveCurrency(idx, e.key === "ArrowUp" ? -1 : 1);
+    listEl.querySelectorAll(".handle")[Math.max(0, Math.min(prefs.currencies.length - 1, idx + (e.key === "ArrowUp" ? -1 : 1)))]?.focus();
+  });
+
+  handle.addEventListener("pointerdown", (e) => {
+    if (e.button > 0) return;
+    e.preventDefault();
+    handle.setPointerCapture(e.pointerId);
+    // The DOM is left untouched while dragging (re-parenting the row would drop the pointer capture
+    // and freeze a fast drag); rows are only shifted with transforms and re-rendered on release.
+    const rows = [...listEl.querySelectorAll(".row")];
+    const from = rows.indexOf(row);
+    const tops = rows.map((r) => r.getBoundingClientRect().top);
+    const step = rows.length > 1 ? tops[1] - tops[0] : row.offsetHeight; // row height incl. border
+    const startY = e.clientY;
+    let target = from;
+    row.classList.add("dragging");
+    rows.forEach((r) => r !== row && r.classList.add("shifting"));
+
+    const onMove = (ev) => {
+      // Keep the dragged row inside the list, however fast the pointer moves.
+      const dy = Math.max(-from * step, Math.min((rows.length - 1 - from) * step, ev.clientY - startY));
+      row.style.transform = `translateY(${dy}px)`;
+      target = Math.max(0, Math.min(rows.length - 1, Math.round(from + dy / step)));
+      rows.forEach((r, i) => {
+        if (r === row) return;
+        const shift = from < target && i > from && i <= target ? -step : from > target && i >= target && i < from ? step : 0;
+        r.style.transform = shift ? `translateY(${shift}px)` : "";
+      });
+    };
+    const onEnd = () => {
+      handle.removeEventListener("pointermove", onMove);
+      handle.removeEventListener("pointerup", onEnd);
+      handle.removeEventListener("pointercancel", onEnd);
+      handle.removeEventListener("lostpointercapture", onEnd);
+      if (target !== from) {
+        const [moved] = prefs.currencies.splice(from, 1);
+        prefs.currencies.splice(target, 0, moved);
+        savePrefs();
+      }
+      renderList();
+    };
+    handle.addEventListener("pointermove", onMove);
+    handle.addEventListener("pointerup", onEnd);
+    handle.addEventListener("pointercancel", onEnd);
+    handle.addEventListener("lostpointercapture", onEnd);
+  });
+}
+
 function moveCurrency(idx, delta) {
   const list = prefs.currencies;
   const target = idx + delta;
@@ -462,6 +523,254 @@ function openPicker() {
   pickerSearch.focus();
 }
 
+// ---------- copy amount (long-press) ----------
+
+const LONG_PRESS_MS = 500;
+let lastLongPress = 0;
+let toastTimer = null;
+
+function showToast(text) {
+  toastEl.textContent = text;
+  toastEl.hidden = false;
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => (toastEl.hidden = true), 1800);
+}
+
+// navigator.clipboard needs a secure context (https or localhost); this app is often opened over
+// plain http on a LAN address, so fall back to a temporary textarea and execCommand.
+async function copyText(text) {
+  try {
+    if (navigator.clipboard && window.isSecureContext) {
+      await navigator.clipboard.writeText(text);
+      return true;
+    }
+  } catch {
+    /* fall through to the legacy path */
+  }
+  const ta = document.createElement("textarea");
+  ta.value = text;
+  ta.readOnly = true;
+  ta.setAttribute("inputmode", "none");
+  ta.style.cssText = "position:fixed;top:0;left:0;opacity:0;pointer-events:none";
+  document.body.append(ta);
+  ta.select();
+  ta.setSelectionRange(0, text.length);
+  let ok = false;
+  try {
+    ok = document.execCommand("copy");
+  } catch {
+    ok = false;
+  }
+  ta.remove();
+  return ok;
+}
+
+// Plain number for pasting elsewhere: no thousands separators.
+function plainAmount(value, code) {
+  if (value == null || !isFinite(value)) return "";
+  const digits = Math.abs(value) < 1 ? { maximumSignificantDigits: 4 } : { maximumFractionDigits: currencyDigits(code) };
+  return new Intl.NumberFormat("en-US", { ...digits, useGrouping: false }).format(value);
+}
+
+async function copyRowValue(row) {
+  const code = row.dataset.code;
+  const value = code === prefs.baseCode ? prefs.baseAmount : convert(prefs.baseAmount, prefs.baseCode, code);
+  const text = plainAmount(value, code);
+  if (!text) return;
+  showToast((await copyText(text)) ? t("copied", { value: `${text} ${code}` }) : t("copyFailed"));
+}
+
+function setupCopy() {
+  let timer = null;
+  let startX = 0;
+  let startY = 0;
+  const cancel = () => clearTimeout(timer);
+
+  listEl.addEventListener("pointerdown", (e) => {
+    const row = e.target.closest(".row");
+    if (editing || !row || !e.target.closest(".value") || e.button > 0) return;
+    startX = e.clientX;
+    startY = e.clientY;
+    cancel();
+    timer = setTimeout(() => {
+      lastLongPress = Date.now();
+      if (navigator.vibrate) navigator.vibrate(15);
+      copyRowValue(row);
+    }, LONG_PRESS_MS);
+  });
+  listEl.addEventListener("pointermove", (e) => {
+    if (Math.hypot(e.clientX - startX, e.clientY - startY) > 8) cancel(); // scrolling, not pressing
+  });
+  for (const type of ["pointerup", "pointercancel", "pointerleave"]) listEl.addEventListener(type, cancel);
+  window.addEventListener("scroll", cancel, { passive: true });
+  // Long-press opens the browser's text menu on touch devices; we use it for copying instead.
+  listEl.addEventListener("contextmenu", (e) => {
+    if (e.target.closest(".value")) e.preventDefault();
+  });
+}
+
+// ---------- rate chart ----------
+
+const SVG_NS = "http://www.w3.org/2000/svg";
+const chartSvg = $("#chart-svg");
+const chartMsg = $("#chart-msg");
+const chartTitle = $("#chart-title");
+const chartChange = $("#chart-change");
+const chartReadout = $("#chart-readout");
+let chartPair = null;   // { base, quote }
+let chartPoints = [];
+let chartToken = 0;     // drops responses that arrive after the pair or range changed
+
+function svgEl(name, attrs) {
+  const el = document.createElementNS(SVG_NS, name);
+  for (const k in attrs) el.setAttribute(k, attrs[k]);
+  return el;
+}
+
+function chartTime(ts, range) {
+  const d = new Date(ts * 1000);
+  const opts = range === "1d" || range === "1w"
+    ? { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" }
+    : { year: "numeric", month: "short", day: "numeric" };
+  return d.toLocaleString(I18n.lang, opts);
+}
+
+function chartRange() {
+  return prefs.chartRange || "1m";
+}
+
+function setChartReadout(point) {
+  const { base, quote } = chartPair;
+  chartReadout.replaceChildren();
+  if (!point) return;
+  const strong = document.createElement("b");
+  strong.textContent = `1 ${base} = ${formatRate(point[1])} ${quote}`;
+  chartReadout.append(strong, document.createElement("br"), chartTime(point[0], chartRange()));
+}
+
+function drawChart() {
+  chartSvg.replaceChildren();
+  chartMsg.textContent = "";
+  const pts = chartPoints;
+  if (pts.length < 2) return;
+  const W = chartSvg.clientWidth || 300;
+  const H = chartSvg.clientHeight || 180;
+  const padL = 4, padR = 44, padT = 10, padB = 16;
+  chartSvg.setAttribute("viewBox", `0 0 ${W} ${H}`);
+
+  const vals = pts.map((p) => p[1]);
+  let lo = Math.min(...vals);
+  let hi = Math.max(...vals);
+  if (hi === lo) { hi += Math.abs(hi) * 0.001 || 1; lo -= Math.abs(lo) * 0.001 || 1; }
+  const t0 = pts[0][0];
+  const t1 = pts[pts.length - 1][0];
+  const x = (ts) => padL + ((ts - t0) / (t1 - t0 || 1)) * (W - padL - padR);
+  const y = (v) => padT + (1 - (v - lo) / (hi - lo)) * (H - padT - padB);
+
+  // Min / max guide lines labelled on the right.
+  for (const v of [hi, lo]) {
+    chartSvg.append(svgEl("line", { class: "grid", x1: padL, x2: W - padR, y1: y(v), y2: y(v) }));
+    const label = svgEl("text", { class: "axis", x: W - padR + 4, y: y(v) + 3 });
+    label.textContent = formatRate(v);
+    chartSvg.append(label);
+  }
+  const line = pts.map((p, i) => `${i ? "L" : "M"}${x(p[0]).toFixed(1)},${y(p[1]).toFixed(1)}`).join("");
+  chartSvg.append(svgEl("path", { class: "area", d: `${line}L${x(t1).toFixed(1)},${H - padB}L${x(t0).toFixed(1)},${H - padB}Z` }));
+  chartSvg.append(svgEl("path", { class: "line", d: line }));
+
+  const cursor = svgEl("line", { class: "cursor", y1: padT, y2: H - padB, visibility: "hidden" });
+  const dot = svgEl("circle", { class: "dot", r: 4, visibility: "hidden" });
+  chartSvg.append(cursor, dot);
+
+  const scrub = (e) => {
+    const rect = chartSvg.getBoundingClientRect();
+    const ts = t0 + ((e.clientX - rect.left - padL) / (W - padL - padR)) * (t1 - t0);
+    let best = pts[0];
+    for (const p of pts) if (Math.abs(p[0] - ts) < Math.abs(best[0] - ts)) best = p;
+    cursor.setAttribute("x1", x(best[0]));
+    cursor.setAttribute("x2", x(best[0]));
+    dot.setAttribute("cx", x(best[0]));
+    dot.setAttribute("cy", y(best[1]));
+    cursor.removeAttribute("visibility");
+    dot.removeAttribute("visibility");
+    setChartReadout(best);
+  };
+  const release = () => {
+    cursor.setAttribute("visibility", "hidden");
+    dot.setAttribute("visibility", "hidden");
+    setChartReadout(pts[pts.length - 1]);
+  };
+  chartSvg.onpointerdown = (e) => { chartSvg.setPointerCapture(e.pointerId); scrub(e); };
+  chartSvg.onpointermove = scrub; // also follows a hovering mouse
+  chartSvg.onpointerup = chartSvg.onpointercancel = chartSvg.onpointerleave = release;
+}
+
+function renderChartHeader() {
+  const { base, quote } = chartPair;
+  chartTitle.textContent = t("chartPair", { base: `${flagFor(base)} ${base}`, quote: `${flagFor(quote)} ${quote}` });
+  for (const btn of chartDialog.querySelectorAll("[data-range]")) {
+    btn.setAttribute("aria-pressed", String(btn.dataset.range === chartRange()));
+  }
+}
+
+async function loadChart() {
+  const { base, quote } = chartPair;
+  const token = ++chartToken;
+  chartPoints = [];
+  chartSvg.replaceChildren();
+  chartChange.textContent = "";
+  chartChange.className = "chart-change";
+  chartReadout.replaceChildren();
+  chartMsg.textContent = t("chartLoading");
+  renderChartHeader();
+  try {
+    const res = await fetch(`api/history?base=${base}&quote=${quote}&range=${chartRange()}`);
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const data = await res.json();
+    if (token !== chartToken) return;
+    chartPoints = data.points;
+  } catch {
+    if (token !== chartToken) return;
+    chartMsg.textContent = t("chartUnavailable");
+    return;
+  }
+  const first = chartPoints[0][1];
+  const last = chartPoints[chartPoints.length - 1][1];
+  const pct = ((last - first) / first) * 100;
+  const sign = pct > 0 ? "▲ +" : pct < 0 ? "▼ −" : "";
+  chartChange.textContent = `${sign}${Math.abs(pct).toFixed(2)}%`;
+  chartChange.className = `chart-change ${pct > 0 ? "up" : pct < 0 ? "down" : ""}`;
+  drawChart();
+  setChartReadout(chartPoints[chartPoints.length - 1]);
+}
+
+function openChart(base, quote) {
+  if (activeInput) stopEditing();
+  chartPair = { base, quote };
+  chartDialog.showModal();
+  loadChart();
+}
+
+function setupChart() {
+  for (const btn of chartDialog.querySelectorAll("[data-range]")) {
+    btn.addEventListener("click", () => {
+      prefs.chartRange = btn.dataset.range;
+      savePrefs();
+      loadChart();
+    });
+  }
+  chartDialog.addEventListener("close", () => { chartToken++; });
+  // A tap on the backdrop (the dialog element itself, outside its content) closes the chart. Both the press and
+  // the release must be there, so a scrub that merely ends outside the chart doesn't close it.
+  let pressedBackdrop = false;
+  chartDialog.addEventListener("pointerdown", (e) => { pressedBackdrop = e.target === chartDialog; });
+  chartDialog.addEventListener("click", (e) => {
+    if (e.target === chartDialog && pressedBackdrop) chartDialog.close();
+    pressedBackdrop = false;
+  });
+  window.addEventListener("resize", () => { if (chartDialog.open && chartPoints.length) drawChart(); });
+}
+
 // ---------- language ----------
 
 // Re-translates everything on screen; called at startup and whenever the language changes.
@@ -476,6 +785,10 @@ function applyLanguage() {
     renderStatus();
   }
   if (picker.open) renderPicker();
+  if (chartDialog.open && chartPair) {
+    renderChartHeader();
+    if (chartPoints.length) setChartReadout(chartPoints[chartPoints.length - 1]);
+  }
 }
 
 // ---------- theme ----------
@@ -577,8 +890,8 @@ function setupPullToRefresh() {
   let pull = 0;
 
   window.addEventListener("touchstart", (e) => {
-    if (window.scrollY > 0 || picker.open || e.touches.length !== 1 || ptrEl.classList.contains("refreshing")) return;
-    if (e.target.closest("#keypad")) return;
+    if (window.scrollY > 0 || picker.open || chartDialog.open || e.touches.length !== 1 || ptrEl.classList.contains("refreshing")) return;
+    if (e.target.closest("#keypad, .handle")) return; // dragging a row must not pull to refresh
     startY = e.touches[0].clientY;
     pull = 0;
   }, { passive: true });
@@ -692,6 +1005,8 @@ async function init() {
   refreshBtn.addEventListener("click", refreshRates);
   setupPullToRefresh();
   setupKeypad();
+  setupCopy();
+  setupChart();
   window.addEventListener("offline", renderStatus);
   setInterval(renderStatus, 30_000);
 
