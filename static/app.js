@@ -1,4 +1,5 @@
 "use strict";
+// All URLs are relative so the app works both at "/" and under a sub-path like "/fx/".
 
 const PREFS_KEY = "cc.prefs";
 const RATES_KEY = "cc.rates";
@@ -310,7 +311,7 @@ function applyTheme() {
 
 async function loadCurrencies() {
   try {
-    const res = await fetch("/api/currencies");
+    const res = await fetch("api/currencies");
     if (!res.ok) throw new Error(res.statusText);
     const data = await res.json();
     saveJSON(CURRENCIES_KEY, data);
@@ -339,7 +340,7 @@ function refreshRates() {
 
 async function fetchRates() {
   try {
-    const res = await fetch("/api/rates", { cache: "no-store" });
+    const res = await fetch("api/rates", { cache: "no-store" });
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     ratesData = await res.json();
     saveJSON(RATES_KEY, ratesData);
@@ -476,7 +477,7 @@ async function init() {
 
 if ("serviceWorker" in navigator) {
   window.addEventListener("load", () => {
-    navigator.serviceWorker.register("/sw.js").catch((err) => console.warn("SW registration failed", err));
+    navigator.serviceWorker.register("sw.js").catch((err) => console.warn("SW registration failed", err));
   });
 }
 

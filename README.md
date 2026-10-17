@@ -36,6 +36,7 @@ docker compose up -d --build
 | `REFRESH_MARGIN_SECONDS` | 20% of TTL, max 60 | How many seconds before expiry the background task refetches. |
 | `LOG_LEVEL` | `warning` | Log verbosity. Only errors and failed sources are logged by default; set `debug` to see each refresh. HTTP access logs are disabled. |
 | `PORT` | `8000` | HTTP port. |
+| `BASE_PATH` | *(empty)* | Optional sub-path such as `/fx`. Only needed if your proxy forwards `/fx/...` **without** stripping the prefix. The app keeps serving `/` either way. |
 
 Run a single uvicorn worker, so there is one shared cache and refresher.
 
@@ -44,6 +45,25 @@ Run a single uvicorn worker, so there is one shared cache and refresher.
 - `GET /api/rates`: rates expressed as units per 1 USD, plus where each rate came from, `updated_at`, `expires_at` and `stale`.
 - `GET /api/currencies`: the supported currencies and the default selection.
 - `GET /healthz`: health check.
+
+## Hosting under a sub-path (e.g. `https://example.com/fx/`)
+
+The frontend uses only relative URLs, so the same build works at `http://<ip>:8000/` and behind a proxy at `/fx/`.
+
+**nginx** (strips the prefix, so no app config is needed). With a trailing slash on both `location` and `proxy_pass`, nginx also redirects `/fx` to `/fx/`:
+
+```nginx
+location /fx/ {
+    proxy_pass http://127.0.0.1:8000/;
+    proxy_set_header Host $host;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto $scheme;
+}
+```
+
+If your proxy forwards the path unchanged (e.g. Traefik without `stripprefix`), set `BASE_PATH=/fx`. The app then serves both `/fx/...` and `/...`, and redirects `/fx` to `/fx/`.
+
+The URL must end with a slash (`/fx/`) because relative URLs resolve against it.
 
 ## PWA
 

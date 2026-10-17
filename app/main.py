@@ -10,7 +10,7 @@ from pathlib import Path
 
 import httpx
 from fastapi import FastAPI, Request
-from fastapi.responses import FileResponse, JSONResponse
+from fastapi.responses import FileResponse, JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 
 from .currencies import CURRENCIES, DEFAULT_SELECTION
@@ -27,6 +27,10 @@ STATIC_DIR = Path(__file__).resolve().parent.parent / "static"
 CACHE_TTL_SECONDS = float(os.getenv("CACHE_TTL_SECONDS", "300"))
 _margin = os.getenv("REFRESH_MARGIN_SECONDS")
 REFRESH_MARGIN_SECONDS = float(_margin) if _margin else None
+# Optional sub-path (e.g. "/fx") for reverse proxies that forward /fx/... without stripping it.
+# The app keeps serving "/" too, so http://<ip>:8000/ works either way.
+_base = os.getenv("BASE_PATH", "").strip("/")
+BASE_PATH = f"/{_base}" if _base else ""
 # Yahoo answers 429 to full browser UA strings sent without browser cookies; a bare one works.
 USER_AGENT = "Mozilla/5.0"
 
@@ -54,6 +58,32 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(title="Currency Converter", lifespan=lifespan)
+
+
+class BasePathMiddleware:
+    """Serve the app under BASE_PATH as well as at the root."""
+
+    def __init__(self, app, base_path: str) -> None:
+        self.app = app
+        self.base_path = base_path
+
+    async def __call__(self, scope, receive, send):
+        if scope["type"] == "http":
+            path = scope["path"]
+            if path == self.base_path:
+                # The frontend uses relative URLs, which need the trailing slash.
+                query = scope.get("query_string", b"").decode("latin-1")
+                location = self.base_path + "/" + (f"?{query}" if query else "")
+                await RedirectResponse(location, status_code=308)(scope, receive, send)
+                return
+            if path.startswith(self.base_path + "/"):
+                stripped = path[len(self.base_path):]
+                scope = dict(scope, path=stripped, raw_path=stripped.encode("latin-1"))
+        await self.app(scope, receive, send)
+
+
+if BASE_PATH:
+    app.add_middleware(BasePathMiddleware, base_path=BASE_PATH)
 
 
 @app.middleware("http")
@@ -107,12 +137,8 @@ async def healthz(request: Request):
 
 @app.get("/sw.js", include_in_schema=False)
 async def service_worker():
-    # The service worker must be served from the root for a "/" scope and never be cached long.
-    return FileResponse(
-        STATIC_DIR / "sw.js",
-        media_type="application/javascript",
-        headers={"Cache-Control": "no-cache", "Service-Worker-Allowed": "/"},
-    )
+    # Its scope is the directory it's served from ("/" or e.g. "/fx/"); never cache it long.
+    return FileResponse(STATIC_DIR / "sw.js", media_type="application/javascript", headers={"Cache-Control": "no-cache"})
 
 
 app.mount("/", StaticFiles(directory=STATIC_DIR, html=True), name="static")

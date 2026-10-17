@@ -11,4 +11,6 @@ services:
       # Optional: how many seconds before expiry to refresh (default: 20% of TTL, max 60s).
       # REFRESH_MARGIN_SECONDS: "60"
       LOG_LEVEL: "${LOG_LEVEL:-warning}"
+      # Only needed if your reverse proxy forwards /fx/... without stripping the prefix.
+      BASE_PATH: "${BASE_PATH:-}"
     restart: unless-stopped
