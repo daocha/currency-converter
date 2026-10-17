@@ -36,12 +36,13 @@ class Interval:
     keep: int          # newest bars kept per currency (0 = keep everything)
     every: int         # seconds between refreshes
     overlap: int       # re-request this much before the newest stored bar
+    stale: int         # a cross rate may reuse a currency's last quote for up to this long
 
 
 INTERVALS: Dict[str, Interval] = {
-    "5m": Interval("5m", 300, 4 * DAY, 1200, 300, 3600),
-    "30m": Interval("30m", 1800, 14 * DAY, 600, 1800, 3 * 3600),
-    "1d": Interval("1d", DAY, 370 * DAY, 0, 3600, 3 * DAY),
+    "5m": Interval("5m", 300, 4 * DAY, 1200, 300, 3600, 12 * 3600),
+    "30m": Interval("30m", 1800, 14 * DAY, 600, 1800, 3 * 3600, 12 * 3600),
+    "1d": Interval("1d", DAY, 370 * DAY, 0, 3600, 3 * DAY, 4 * DAY),
 }
 
 # chart range -> (interval, how much of it to show): ("bars", n) = newest n bars, ("days", n) = last n days.
@@ -71,14 +72,31 @@ async def fetch_bars(client: httpx.AsyncClient, code: str, iv: Interval, start: 
     return [(int(ts), float(c)) for ts, c in zip(result.get("timestamp") or [], closes) if c and c > 0]
 
 
-def combine(base: Series, quote: Series, base_code: str, quote_code: str, bucket: int) -> List[List[float]]:
-    """[[unix_ts, rate], ...] for 1 base_code in quote_code, oldest first."""
+def combine(
+    base: Series, quote: Series, base_code: str, quote_code: str, bucket: int, max_age: int = 0
+) -> List[List[float]]:
+    """[[unix_ts, rate], ...] for 1 base_code in quote_code, oldest first.
+
+    Thinly quoted currencies (PHP, VND, ...) have no Yahoo bar for many 5-minute slots. For a cross
+    pair each leg therefore keeps its last quote ("as of" join) for up to ``max_age`` buckets, instead
+    of the pair only existing where both legs happened to have a bar. A point is emitted at every
+    bucket where either leg has a bar; a leg whose last quote is older than ``max_age`` (a closed
+    market, e.g. over a weekend) ends the run, so closures still show as gaps.
+    """
     if base_code == "USD":
         pairs = dict(quote)
     elif quote_code == "USD":
         pairs = {b: 1.0 / v for b, v in base.items()}
     else:
-        pairs = {b: quote[b] / base[b] for b in base.keys() & quote.keys()}
+        pairs = {}
+        last_base = last_quote = None  # (bucket, value)
+        for b in sorted(base.keys() | quote.keys()):
+            if b in base:
+                last_base = (b, base[b])
+            if b in quote:
+                last_quote = (b, quote[b])
+            if last_base and last_quote and b - last_base[0] <= max_age and b - last_quote[0] <= max_age:
+                pairs[b] = last_quote[1] / last_base[1]
     return [[b * bucket, round(v, 6)] for b, v in sorted(pairs.items())]
 
 
@@ -199,7 +217,7 @@ class HistoryService:
         await asyncio.gather(*(self._ensure(c, iv) for c in legs))  # first use before the background fill got there
         limit = iv.keep or 400
         series = {c: await asyncio.to_thread(self.store.load, c, iv.name, limit) for c in legs}
-        points = combine(series.get(base, {}), series.get(quote, {}), base, quote, iv.bucket)
+        points = combine(series.get(base, {}), series.get(quote, {}), base, quote, iv.bucket, iv.stale // iv.bucket)
         if unit == "bars":
             return points[-amount:]
         if not points:
