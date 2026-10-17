@@ -15,6 +15,7 @@ from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, Redirect
 from fastapi.staticfiles import StaticFiles
 
 from .currencies import CURRENCIES, DEFAULT_SELECTION
+from .history import RANGES, get_history
 from .rates import RateService
 
 logging.basicConfig(
@@ -50,6 +51,7 @@ async def lifespan(app: FastAPI):
             refresh_margin=REFRESH_MARGIN_SECONDS,
         )
         app.state.rates = service
+        app.state.http = client
         log.debug("cache TTL %ss, refreshing %ss before expiry", service.ttl, service.refresh_margin)
         service.start()
         try:
@@ -128,6 +130,24 @@ async def get_currencies():
         "currencies": [{"code": c, "name": n} for c, n in CURRENCIES.items()],
         "defaults": DEFAULT_SELECTION,
     }
+
+
+@app.get("/api/history")
+async def history(request: Request, base: str, quote: str, range: str = "1m"):
+    base, quote = base.upper(), quote.upper()
+    if base not in CURRENCIES or quote not in CURRENCIES or range not in RANGES:
+        return JSONResponse({"error": "invalid base, quote or range"}, status_code=400)
+    try:
+        points = await get_history(request.app.state.http, base, quote, range)
+    except Exception as exc:  # noqa: BLE001
+        log.warning("history %s/%s %s failed: %s", base, quote, range, exc)
+        points = []
+    if not points:
+        return JSONResponse({"error": "history unavailable"}, status_code=503)
+    return JSONResponse(
+        {"base": base, "quote": quote, "range": range, "points": points},
+        headers={"Cache-Control": "no-cache"},
+    )
 
 
 @app.get("/healthz")

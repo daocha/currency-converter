@@ -81,6 +81,32 @@
     </form>
   </dialog>
 
+  <dialog id="chart">
+    <form method="dialog" class="chart">
+      <div class="chart-head">
+        <div class="chart-titles">
+          <div id="chart-title" class="chart-title"></div>
+          <div id="chart-change" class="chart-change"></div>
+        </div>
+        <button class="btn ghost" value="close" data-i18n="done">Done</button>
+      </div>
+      <div id="chart-readout" class="chart-readout" aria-live="polite"></div>
+      <div id="chart-plot" class="chart-plot">
+        <svg id="chart-svg" class="chart-svg" role="img"></svg>
+        <div id="chart-msg" class="chart-msg"></div>
+      </div>
+      <div class="chart-ranges" role="group" data-i18n-attrs="aria-label:chartRange" aria-label="Time range">
+        <button type="button" class="btn ghost" data-range="1d" data-i18n="range1d">1D</button>
+        <button type="button" class="btn ghost" data-range="1w" data-i18n="range1w">1W</button>
+        <button type="button" class="btn ghost" data-range="1m" data-i18n="range1m">1M</button>
+        <button type="button" class="btn ghost" data-range="3m" data-i18n="range3m">3M</button>
+        <button type="button" class="btn ghost" data-range="1y" data-i18n="range1y">1Y</button>
+      </div>
+    </form>
+  </dialog>
+
+  <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
+
   <div id="keypad" class="keypad" hidden>
     <div class="keypad-inner" role="group" aria-label="Calculator keypad" data-i18n-attrs="aria-label:keypad">
       <div class="keypad-head">
