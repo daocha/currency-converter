@@ -1,0 +1,92 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Currency Converter</title>
+  <meta name="description" content="Fast currency converter with near real-time FX rates.">
+  <meta name="theme-color" content="#f6f7fb">
+  <link rel="manifest" href="/manifest.webmanifest">
+  <link rel="icon" href="/icons/icon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <script>
+    // Apply the saved theme before first paint to avoid a flash.
+    (function () {
+      try {
+        var t = JSON.parse(localStorage.getItem("cc.prefs") || "{}").theme || "system";
+        if (t === "system") t = matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+        document.documentElement.dataset.theme = t;
+      } catch (e) {}
+    })();
+  </script>
+  <link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+  <div id="ptr" class="ptr" aria-hidden="true"><span class="ptr-icon">↻</span></div>
+  <header class="topbar">
+    <h1>Currency Converter</h1>
+    <div class="actions">
+      <button id="install-btn" class="btn ghost" hidden>Install</button>
+      <label class="theme-picker">
+        <span class="sr-only">Theme</span>
+        <select id="theme-select" aria-label="Theme">
+          <option value="system">System</option>
+          <option value="light">Light</option>
+          <option value="dark">Dark</option>
+        </select>
+      </label>
+    </div>
+  </header>
+
+  <main>
+    <div class="toolbar">
+      <div class="status-wrap">
+        <span id="status" class="status" aria-live="polite">Loading rates…</span>
+        <button id="refresh-btn" class="icon-btn refresh" title="Refresh rates" aria-label="Refresh rates">↻</button>
+      </div>
+      <button id="edit-btn" class="btn ghost" aria-pressed="false">Edit</button>
+    </div>
+
+    <ul id="currency-list" class="currency-list"></ul>
+
+    <button id="add-btn" class="btn primary block">+ Add currency</button>
+  </main>
+
+  <footer class="footer">
+    <span id="source"></span>
+  </footer>
+
+  <dialog id="picker">
+    <form method="dialog" class="picker">
+      <div class="picker-head">
+        <input id="picker-search" type="search" placeholder="Search currencies" autocomplete="off" aria-label="Search currencies">
+        <button class="btn ghost" value="close">Done</button>
+      </div>
+      <ul id="picker-list" class="picker-list"></ul>
+    </form>
+  </dialog>
+
+  <template id="row-template">
+    <li class="row">
+      <span class="flag" aria-hidden="true"></span>
+      <div class="meta">
+        <span class="code"></span>
+        <span class="name"></span>
+      </div>
+      <div class="value">
+        <input class="amount" type="text" inputmode="decimal" autocomplete="off" spellcheck="false">
+        <span class="hint"></span>
+      </div>
+      <div class="edit-controls">
+        <button class="icon-btn up" title="Move up" aria-label="Move up">↑</button>
+        <button class="icon-btn down" title="Move down" aria-label="Move down">↓</button>
+        <button class="icon-btn remove" title="Remove" aria-label="Remove">✕</button>
+      </div>
+    </li>
+  </template>
+
+  <script src="/app.js" defer></script>
+</body>
+</html>
