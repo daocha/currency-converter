@@ -536,17 +536,10 @@ function showToast(text) {
   toastTimer = setTimeout(() => (toastEl.hidden = true), 1800);
 }
 
-// navigator.clipboard needs a secure context (https or localhost); this app is often opened over
-// plain http on a LAN address, so fall back to a temporary textarea and execCommand.
+// Copies synchronously with a temporary textarea + execCommand first: it needs no permission, so there
+// is no prompt (the async Clipboard API can show one, and then fails or hangs while it is unanswered),
+// and it also works over plain http. The Clipboard API is only the fallback.
 async function copyText(text) {
-  try {
-    if (navigator.clipboard && window.isSecureContext) {
-      await navigator.clipboard.writeText(text);
-      return true;
-    }
-  } catch {
-    /* fall through to the legacy path */
-  }
   const ta = document.createElement("textarea");
   ta.value = text;
   ta.readOnly = true;
@@ -562,7 +555,18 @@ async function copyText(text) {
     ok = false;
   }
   ta.remove();
-  return ok;
+  if (ok) return true;
+  if (!(navigator.clipboard && window.isSecureContext)) return false;
+  try {
+    // Don't wait forever on an unanswered permission prompt.
+    await Promise.race([
+      navigator.clipboard.writeText(text),
+      new Promise((_, reject) => setTimeout(reject, 2000)),
+    ]);
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 // Plain number for pasting elsewhere: no thousands separators.
