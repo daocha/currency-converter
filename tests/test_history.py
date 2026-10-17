@@ -19,9 +19,26 @@ def test_usd_quote_inverts_base_leg():
     assert combine({1: 4.0}, {}, "PLN", "USD", 60) == [[60, 0.25]]
 
 
-def test_cross_pair_uses_shared_buckets_only():
-    pts = combine({1: 0.5, 2: 0.5, 3: 0.5}, {2: 1.0, 3: 2.0, 4: 9.0}, "EUR", "GBP", 10)
-    assert pts == [[20, 2.0], [30, 4.0]]
+def test_cross_pair_carries_last_quote_across_gaps_in_a_thin_leg():
+    # EUR quotes every bucket, GBP only at 2 and 6: the pair still has a point at every EUR bucket.
+    eur = {b: 2.0 for b in range(1, 8)}
+    gbp = {2: 4.0, 6: 8.0}
+    pts = combine(eur, gbp, "EUR", "GBP", 10, max_age=10)
+    assert pts == [[20, 2.0], [30, 2.0], [40, 2.0], [50, 2.0], [60, 4.0], [70, 4.0]]
+
+
+def test_cross_pair_does_not_bridge_a_closed_market():
+    eur = {1: 1.0, 2: 1.0, 20: 1.0, 21: 1.0}
+    gbp = {1: 2.0, 2: 2.0, 20: 3.0, 21: 3.0}
+    pts = combine(eur, gbp, "EUR", "GBP", 10, max_age=5)
+    assert [p[0] for p in pts] == [10, 20, 200, 210]  # nothing is invented between bucket 2 and 20
+
+
+def test_cross_pair_stale_leg_stops_after_max_age():
+    eur = {b: 1.0 for b in range(1, 12)}
+    gbp = {1: 2.0}
+    pts = combine(eur, gbp, "EUR", "GBP", 10, max_age=3)
+    assert [p[0] for p in pts] == [10, 20, 30, 40]  # GBP's quote is reused for 3 buckets, then dropped
 
 
 class FakeYahoo:
