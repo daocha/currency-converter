@@ -210,9 +210,6 @@ select {
 .icon-btn:disabled { opacity: 0.35; cursor: default; }
 .icon-btn.remove { color: var(--danger); }
 
-.toolbar-actions { display: flex; align-items: center; gap: 8px; }
-.icon-btn.keypad-toggle { width: 36px; height: 34px; display: inline-flex; align-items: center; justify-content: center; color: var(--muted); }
-.icon-btn.keypad-toggle[aria-pressed="true"] { color: var(--accent); border-color: var(--accent); }
 
 .row:not(.editing .row) { cursor: text; }
 
