@@ -17,6 +17,7 @@ const pickerList = $("#picker-list");
 const pickerSearch = $("#picker-search");
 const rowTemplate = $("#row-template");
 const refreshBtn = $("#refresh-btn");
+const calcBar = $("#calc-bar");
 const ptrEl = $("#ptr");
 
 let currencies = {};       // code -> name
@@ -81,13 +82,6 @@ function formatRate(value) {
   return new Intl.NumberFormat("en-US", opts).format(value);
 }
 
-function parseAmount(text) {
-  const cleaned = text.replace(/[^0-9.\-]/g, "");
-  if (cleaned === "" || cleaned === "-" || cleaned === ".") return null;
-  const n = parseFloat(cleaned);
-  return isFinite(n) ? n : null;
-}
-
 function flagFor(code) {
   const cc = code.slice(0, 2).toUpperCase();
   return String.fromCodePoint(...[...cc].map((c) => 0x1f1e6 + c.charCodeAt(0) - 65));
@@ -138,8 +132,14 @@ function renderList() {
     const input = row.querySelector(".amount");
     input.setAttribute("aria-label", `Amount in ${code}`);
     input.addEventListener("input", () => onAmountInput(code, input));
-    input.addEventListener("focus", () => input.select());
-    input.addEventListener("blur", () => updateValues());
+    input.addEventListener("focus", () => onAmountFocus(row, input));
+    input.addEventListener("blur", () => onAmountBlur());
+    input.addEventListener("keydown", (e) => {
+      if (e.key === "Enter" || e.key === "=") {
+        e.preventDefault();
+        commitAmount(code, input);
+      }
+    });
 
     const up = row.querySelector(".up");
     const down = row.querySelector(".down");
@@ -179,8 +179,12 @@ function updateValues() {
       input.value = formatAmount(value, code);
     }
 
-    if (code === base || rate(base) == null) {
-      hint.textContent = " ";
+    if (code === base) {
+      // While typing a calculation, preview its result under the field.
+      const typing = document.activeElement === input && Calc.isExpression(input.value);
+      hint.textContent = typing && amount != null ? `= ${formatAmount(amount, code)}` : "\u00a0";
+    } else if (rate(base) == null) {
+      hint.textContent = "\u00a0";
     } else {
       hint.textContent = `1 ${base} = ${formatRate(convert(1, base, code))} ${code}`;
     }
@@ -217,9 +221,71 @@ function sourceLabel(s) {
 
 function onAmountInput(code, input) {
   prefs.baseCode = code;
-  prefs.baseAmount = parseAmount(input.value);
+  prefs.baseAmount = Calc.evaluatePartial(input.value);
   savePrefs();
   updateValues();
+}
+
+// Replace a typed calculation with its result, keeping focus so the user can continue.
+function commitAmount(code, input) {
+  if (prefs.baseCode !== code) onAmountInput(code, input);
+  input.value = formatAmount(prefs.baseAmount, code);
+  updateValues();
+}
+
+// ---------- calculator bar ----------
+
+let calcInput = null;      // the amount field the bar is attached to
+let calcPressing = false;  // a bar button is being pressed; ignore the resulting blur
+
+function onAmountFocus(row, input) {
+  calcInput = input;
+  row.append(calcBar);
+  calcBar.hidden = false;
+  input.select();
+}
+
+function onAmountBlur() {
+  if (calcPressing) return;
+  calcBar.hidden = true;
+  calcInput = null;
+  updateValues(); // re-format, which also commits a calculation to its result
+}
+
+function insertIntoAmount(input, text) {
+  let start = input.selectionStart ?? input.value.length;
+  let end = input.selectionEnd ?? input.value.length;
+  // On focus the whole value is selected; an operator should extend it, not replace it.
+  if ("+−×÷".includes(text) && input.value && start === 0 && end === input.value.length) {
+    start = end = input.value.length;
+  }
+  input.setRangeText(text, start, end, "end");
+  input.dispatchEvent(new Event("input", { bubbles: true }));
+}
+
+function setupCalcBar() {
+  // Keep focus (and the mobile keyboard) on the amount field while pressing bar buttons.
+  calcBar.addEventListener("pointerdown", () => (calcPressing = true));
+  calcBar.addEventListener("mousedown", (e) => e.preventDefault());
+  // Runs after the click (or if the press was cancelled / released elsewhere).
+  const release = () => {
+    if (!calcPressing) return;
+    setTimeout(() => {
+      calcPressing = false;
+      if (calcInput && document.activeElement !== calcInput) onAmountBlur();
+    }, 0);
+  };
+  window.addEventListener("pointerup", release);
+  window.addEventListener("pointercancel", release);
+  calcBar.addEventListener("click", (e) => {
+    const btn = e.target.closest("button");
+    const input = calcInput;
+    if (!btn || !input) return;
+    if (document.activeElement !== input) input.focus({ preventScroll: true });
+    const code = input.closest(".row").dataset.code;
+    if (btn.dataset.action === "equals") commitAmount(code, input);
+    else insertIntoAmount(input, btn.dataset.insert);
+  });
 }
 
 function moveCurrency(idx, delta) {
@@ -459,6 +525,7 @@ async function init() {
   window.addEventListener("online", refreshRates);
   refreshBtn.addEventListener("click", refreshRates);
   setupPullToRefresh();
+  setupCalcBar();
   window.addEventListener("offline", renderStatus);
   setInterval(renderStatus, 30_000);
 

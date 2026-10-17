@@ -68,6 +68,16 @@
     </form>
   </dialog>
 
+  <div id="calc-bar" class="calc-bar" hidden>
+    <button type="button" data-insert="+" aria-label="Plus">+</button>
+    <button type="button" data-insert="−" aria-label="Minus">−</button>
+    <button type="button" data-insert="×" aria-label="Times">×</button>
+    <button type="button" data-insert="÷" aria-label="Divide">÷</button>
+    <button type="button" data-insert="(" aria-label="Open parenthesis">(</button>
+    <button type="button" data-insert=")" aria-label="Close parenthesis">)</button>
+    <button type="button" data-action="equals" class="equals" aria-label="Equals">=</button>
+  </div>
+
   <template id="row-template">
     <li class="row">
       <span class="flag" aria-hidden="true"></span>
@@ -87,6 +97,7 @@
     </li>
   </template>
 
+  <script src="calc.js" defer></script>
   <script src="app.js" defer></script>
 </body>
 </html>

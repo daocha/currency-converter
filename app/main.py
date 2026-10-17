@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import logging
 import mimetypes
 import os
@@ -10,7 +11,7 @@ from pathlib import Path
 
 import httpx
 from fastapi import FastAPI, Request
-from fastapi.responses import FileResponse, JSONResponse, RedirectResponse
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, RedirectResponse, Response
 from fastapi.staticfiles import StaticFiles
 
 from .currencies import CURRENCIES, DEFAULT_SELECTION
@@ -133,6 +134,33 @@ async def get_currencies():
 async def healthz(request: Request):
     snap = request.app.state.rates.snapshot
     return {"status": "ok", "rates_loaded": snap is not None, "stale": snap.is_stale if snap else None}
+
+
+# index.html references these; each gets a ?v=<content hash> so browsers load new files after a deploy.
+VERSIONED_ASSETS = ("styles.css", "calc.js", "app.js")
+_index_cache: dict = {}
+
+
+def _render_index() -> tuple:
+    files = [STATIC_DIR / "index.html", *(STATIC_DIR / name for name in VERSIONED_ASSETS)]
+    key = tuple(f.stat().st_mtime_ns for f in files)
+    if _index_cache.get("key") != key:
+        html = files[0].read_text(encoding="utf-8")
+        for name, path in zip(VERSIONED_ASSETS, files[1:]):
+            version = hashlib.sha256(path.read_bytes()).hexdigest()[:10]
+            html = html.replace(f'"{name}"', f'"{name}?v={version}"')
+        etag = '"' + hashlib.sha256(html.encode()).hexdigest()[:16] + '"'
+        _index_cache.update(key=key, html=html, etag=etag)
+    return _index_cache["html"], _index_cache["etag"]
+
+
+@app.get("/", include_in_schema=False)
+@app.get("/index.html", include_in_schema=False)
+async def index(request: Request):
+    html, etag = _render_index()
+    if request.headers.get("if-none-match") == etag:
+        return Response(status_code=304, headers={"ETag": etag})
+    return HTMLResponse(html, headers={"ETag": etag})
 
 
 @app.get("/sw.js", include_in_schema=False)

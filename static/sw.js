@@ -1,7 +1,7 @@
 // Service worker: always go to the network when online; fall back to the cache only when offline.
 // (Cache-first risked serving a stale mix of old and new files, e.g. new HTML with old CSS.)
 // Paths resolve against the worker's scope, so this works at "/" and under a sub-path like "/fx/".
-const VERSION = "v5";
+const VERSION = "v7";
 const SHELL_CACHE = `cc-shell-${VERSION}`;
 const API_CACHE = `cc-api-${VERSION}`;
 const SCOPE = self.registration.scope; // e.g. "https://example.com/fx/"
@@ -10,6 +10,7 @@ const SHELL = [
   "./",
   "index.html",
   "styles.css",
+  "calc.js",
   "app.js",
   "manifest.webmanifest",
   "icons/icon.svg",

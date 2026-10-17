@@ -4,7 +4,7 @@ A small currency converter web app with near-real-time FX rates. You can install
 
 - **Backend:** Python / FastAPI. It caches rates in memory and refreshes them in the background *before* the cache expires.
 - **Rates:** [Yahoo Finance](https://finance.yahoo.com) quotes (`XXX=X` pairs) are the primary source. For any currency Yahoo doesn't return, the app falls back to the free [ExchangeRate-API open endpoint](https://www.exchangerate-api.com/docs/free) (no key needed). If both fail, it keeps serving the last good rates.
-- **Frontend:** plain HTML/CSS/JS with no build step. You can add, remove and reorder currencies and pick a light, dark or system theme. Preferences are stored in `localStorage`, and the last rates are cached so the app also opens offline.
+- **Frontend:** plain HTML/CSS/JS with no build step. You can add, remove and reorder currencies and pick a light, dark or system theme. Amount fields accept simple calculations (`+ − × ÷` and parentheses, e.g. `120×3+15`); a button bar provides the operators on phone keyboards that lack them. Preferences are stored in `localStorage`, and the last rates are cached so the app also opens offline.
 
 ## Run locally (debug)
 
@@ -18,7 +18,8 @@ PORT=9000 CACHE_TTL_SECONDS=900 ./start.sh
 Run the tests:
 
 ```bash
-.venv/bin/python -m pytest -q
+.venv/bin/python -m pytest -q   # backend
+node --test tests/              # calculator (static/calc.js)
 ```
 
 ## Docker
@@ -69,4 +70,4 @@ The URL must end with a slash (`/fx/`) because relative URLs resolve against it.
 
 Browsers only allow installing a PWA from `localhost` or over **HTTPS**. In production, put the app behind a TLS-terminating reverse proxy (Caddy, nginx, Traefik, …).
 
-If you change the frontend, bump `VERSION` in `static/sw.js` so installed clients pick up the new files. To regenerate the icons, run `python scripts/generate_icons.py` (needs Pillow).
+The server stamps `styles.css`, `calc.js` and `app.js` in `index.html` with a content-hash version (`?v=…`), so browsers load changed files automatically. Bump `VERSION` in `static/sw.js` only when you want installed clients to drop their old offline caches. To regenerate the icons, run `python scripts/generate_icons.py` (needs Pillow).

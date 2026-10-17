@@ -194,6 +194,29 @@ select {
 
 .hint { font-size: 0.75rem; color: var(--muted); padding-right: 7px; font-variant-numeric: tabular-nums; white-space: nowrap; }
 
+.calc-bar {
+  grid-column: 1 / -1;
+  display: flex;
+  gap: 6px;
+}
+.calc-bar[hidden], .editing .calc-bar { display: none; }
+.calc-bar button {
+  flex: 1;
+  height: 40px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+  font-size: 1.15rem;
+  font-weight: 600;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+.calc-bar button:hover { background: var(--surface-2); }
+.calc-bar button:active { background: var(--border); }
+.calc-bar .equals { background: var(--accent); border-color: var(--accent); color: var(--accent-contrast); }
+
 .edit-controls { display: none; gap: 4px; }
 .editing .edit-controls { display: flex; }
 
