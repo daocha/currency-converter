@@ -299,6 +299,17 @@ function onAmountBlur(e) {
   }, 0);
 }
 
+// Ends editing immediately (commits the value, closes the keypad). Unlike the blur handler this
+// does not wait for a timer, which matters when the app is being sent to the background:
+// mobile browsers pause timers there, which used to leave the keypad open on return.
+function stopEditing() {
+  const input = activeInput;
+  activeInput = null;
+  hideKeypad();
+  if (input && document.activeElement === input) input.blur();
+  updateValues();
+}
+
 function insertIntoAmount(input, text) {
   let start = input.selectionStart ?? input.value.length;
   let end = input.selectionEnd ?? input.value.length;
@@ -323,12 +334,18 @@ function backspaceAmount(input) {
 
 function pressKey(btn) {
   const input = activeInput;
-  if (!input) return;
-  const { insert, action } = btn.dataset;
-  if (action === "done") {
-    input.blur();
+  if (!input || !input.isConnected) {
+    stopEditing(); // a keypad without a field to type into should not be on screen
     return;
   }
+  const { insert, action } = btn.dataset;
+  if (action === "done") {
+    stopEditing();
+    return;
+  }
+  // Focus can be lost behind our back (e.g. app switching); refocus the field shown in the header.
+  // Like tapping it, that selects the value: a digit starts a new number, an operator continues it.
+  if (document.activeElement !== input) input.focus({ preventScroll: true });
   const code = input.closest(".row").dataset.code;
   if (insert) insertIntoAmount(input, insert);
   else if (action === "backspace") backspaceAmount(input);
@@ -363,7 +380,7 @@ function setupKeypad() {
   });
 
   document.addEventListener("keydown", (e) => {
-    if (e.key === "Escape" && activeInput) activeInput.blur();
+    if (e.key === "Escape" && activeInput) stopEditing();
   });
 }
 
@@ -400,7 +417,7 @@ function removeCurrency(code) {
 
 function setEditing(on) {
   editing = on;
-  if (on && activeInput) activeInput.blur();
+  if (on && activeInput) stopEditing();
   editBtn.setAttribute("aria-pressed", String(on));
   editBtn.textContent = on ? "Done" : "Edit";
   listEl.classList.toggle("editing", on);
@@ -565,7 +582,7 @@ function setupPullToRefresh() {
     }
     ptrEl.classList.add("refreshing");
     setPull(PULL_THRESHOLD, true);
-    if (activeInput) activeInput.blur();
+    stopEditing();
     // Reload only when a new version of the app is deployed; otherwise just refresh the rates,
     // which updates the page in place without a visible reload.
     const [updated] = await Promise.all([newVersionAvailable(), refreshRates(), new Promise((r) => setTimeout(r, 400))]);
@@ -634,8 +651,9 @@ async function init() {
     if (document.visibilityState === "visible") refreshRates();
     // Finish editing when the app goes to the background. Otherwise the OS restores focus to the
     // field on return and opens the device keyboard, which ignores inputmode="none" in that case.
-    else if (activeInput) activeInput.blur();
+    else stopEditing();
   });
+  window.addEventListener("pagehide", stopEditing);
   window.addEventListener("pageshow", (e) => {
     if (e.persisted) refreshRates();
   });
