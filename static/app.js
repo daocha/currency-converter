@@ -519,6 +519,20 @@ function setPull(px, animate = false) {
   ptrEl.querySelector(".ptr-icon").style.transform = ptrEl.classList.contains("refreshing") ? "" : `rotate(${px * 3}deg)`;
 }
 
+// Compares the ?v= content hashes in a freshly fetched index.html with the ones this page loaded.
+async function newVersionAvailable() {
+  const assets = () => [...document.querySelectorAll('script[src*="?v="], link[rel="stylesheet"][href*="?v="]')]
+    .map((el) => el.getAttribute("src") || el.getAttribute("href"));
+  try {
+    const res = await fetch("./", { cache: "no-store" });
+    if (!res.ok) return false;
+    const html = await res.text();
+    return assets().some((url) => !html.includes(`"${url}"`));
+  } catch {
+    return false; // offline: keep the current version
+  }
+}
+
 function setupPullToRefresh() {
   let startY = null;
   let pull = 0;
@@ -542,7 +556,7 @@ function setupPullToRefresh() {
     setPull(pull);
   }, { passive: true });
 
-  const end = () => {
+  const end = async () => {
     if (startY === null) return;
     startY = null;
     if (pull < PULL_THRESHOLD) {
@@ -551,10 +565,16 @@ function setupPullToRefresh() {
     }
     ptrEl.classList.add("refreshing");
     setPull(PULL_THRESHOLD, true);
-    // Full reload, like reopening the app: picks up a newly deployed version as well as fresh
-    // rates (the service worker fetches from the network first; preferences are already saved).
     if (activeInput) activeInput.blur();
-    location.reload();
+    // Reload only when a new version of the app is deployed; otherwise just refresh the rates,
+    // which updates the page in place without a visible reload.
+    const [updated] = await Promise.all([newVersionAvailable(), refreshRates(), new Promise((r) => setTimeout(r, 400))]);
+    if (updated) {
+      location.reload();
+      return;
+    }
+    ptrEl.classList.remove("refreshing");
+    setPull(0, true);
   };
   window.addEventListener("touchend", end);
   window.addEventListener("touchcancel", end);
@@ -566,7 +586,18 @@ async function init() {
   applyTheme();
 
   ratesData = loadJSON(RATES_KEY, null); // show cached rates instantly
-  const meta = await loadCurrencies();
+  // Use the saved currency list so the first render doesn't wait for the network
+  // (waiting left an empty list on screen, which flashed on every reload).
+  const cachedMeta = loadJSON(CURRENCIES_KEY, null);
+  const meta = cachedMeta || (await loadCurrencies());
+  if (cachedMeta) {
+    loadCurrencies().then((fresh) => {
+      if (fresh && JSON.stringify(fresh) !== JSON.stringify(cachedMeta)) {
+        currencies = Object.fromEntries(fresh.currencies.map((c) => [c.code, c.name]));
+        renderList();
+      }
+    });
+  }
   if (meta) {
     currencies = Object.fromEntries(meta.currencies.map((c) => [c.code, c.name]));
   } else {
@@ -584,6 +615,7 @@ async function init() {
   savePrefs();
 
   renderList();
+  document.documentElement.classList.remove("booting"); // see the inline script in index.html
   renderStatus();
   refreshRates();
 

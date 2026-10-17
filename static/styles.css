@@ -33,6 +33,9 @@
 
 html, body { margin: 0; }
 
+/* Until app.js renders the list, keep the content hidden so a half-built page never flashes. */
+html.booting main, html.booting .footer { visibility: hidden; }
+
 /* We handle pull-to-refresh ourselves, so disable the browser's native one. */
 html, body { overscroll-behavior-y: contain; }
 
