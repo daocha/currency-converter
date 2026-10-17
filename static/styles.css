@@ -68,7 +68,24 @@ body {
 
 .topbar h1 { font-size: 1.25rem; margin: 0; font-weight: 700; }
 
-.actions { display: flex; gap: 8px; align-items: center; }
+.actions { display: flex; gap: 8px; align-items: center; flex-shrink: 0; }
+.topbar h1 { min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+/* A header dropdown shown as an icon button; the real <select> sits invisibly on top and still opens the native picker. */
+.icon-select {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 38px;
+  height: 38px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface);
+  font-size: 1.1rem;
+  line-height: 1;
+}
+.icon-select select { position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0; padding: 0; }
+.icon-select:focus-within { outline: 2px solid var(--accent); outline-offset: 2px; }
 
 main {
   flex: 1;
@@ -300,7 +317,8 @@ dialog {
   border: 1px solid var(--border);
   border-radius: 16px;
   padding: 0;
-  width: min(480px, calc(100vw - 32px));
+  box-sizing: border-box;
+  width: min(480px, calc(100vw - 24px));
   max-height: min(640px, calc(100vh - 64px));
   background: var(--surface);
   color: var(--text);
@@ -310,8 +328,11 @@ dialog::backdrop { background: rgba(0, 0, 0, 0.45); }
 
 .picker { display: flex; flex-direction: column; max-height: inherit; }
 .picker-head { display: flex; gap: 8px; padding: 12px; border-bottom: 1px solid var(--border); }
+.picker-head { box-sizing: border-box; width: 100%; }
+.picker-head .btn { flex: 0 0 auto; }
 .picker-head input {
-  flex: 1;
+  flex: 1 1 0;
+  min-width: 0;
   background: var(--surface-2);
   border: 1px solid var(--border);
   border-radius: 10px;

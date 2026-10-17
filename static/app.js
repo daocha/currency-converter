@@ -12,6 +12,8 @@ const statusEl = $("#status");
 const sourceEl = $("#source");
 const editBtn = $("#edit-btn");
 const themeSelect = $("#theme-select");
+const langSelect = $("#lang-select");
+const t = I18n.t;
 const picker = $("#picker");
 const pickerList = $("#picker-list");
 const pickerSearch = $("#picker-search");
@@ -91,10 +93,10 @@ function flagFor(code) {
 
 function timeAgo(date) {
   const secs = Math.max(0, Math.round((Date.now() - date.getTime()) / 1000));
-  if (secs < 60) return "just now";
+  if (secs < 60) return t("justNow");
   const mins = Math.round(secs / 60);
-  if (mins < 60) return `${mins} min ago`;
-  return date.toLocaleString();
+  if (mins < 60) return t("minAgo", { n: mins });
+  return date.toLocaleString(I18n.lang);
 }
 
 // ---------- conversion ----------
@@ -119,7 +121,7 @@ function renderList() {
   if (prefs.currencies.length === 0) {
     const li = document.createElement("li");
     li.className = "empty";
-    li.textContent = "No currencies selected. Add one below.";
+    li.textContent = t("empty");
     listEl.append(li);
     return;
   }
@@ -129,10 +131,11 @@ function renderList() {
     row.dataset.code = code;
     row.querySelector(".flag").textContent = flagFor(code);
     row.querySelector(".code").textContent = code;
-    row.querySelector(".name").textContent = currencies[code] || code;
+    row.querySelector(".name").textContent = I18n.currencyName(code, currencies[code]);
+    I18n.apply(row);
 
     const input = row.querySelector(".amount");
-    input.setAttribute("aria-label", `Amount in ${code}`);
+    input.setAttribute("aria-label", t("amountIn", { code }));
     input.addEventListener("input", () => onAmountInput(code, input));
     input.addEventListener("focus", () => onAmountFocus(input));
     input.addEventListener("blur", onAmountBlur);
@@ -175,7 +178,7 @@ function updateValues() {
 
     if (!available) {
       if (document.activeElement !== input) input.value = "";
-      input.placeholder = ratesData ? "unavailable" : "…";
+      input.placeholder = ratesData ? t("unavailable") : "…";
       hint.textContent = "";
       continue;
     }
@@ -201,28 +204,28 @@ function updateValues() {
 
 function renderStatus() {
   if (!ratesData) {
-    statusEl.textContent = navigator.onLine ? "Loading rates…" : "Offline — no cached rates yet";
+    statusEl.textContent = navigator.onLine ? t("loadingRates") : t("offlineNoCache");
     statusEl.classList.toggle("warn", !navigator.onLine);
     return;
   }
   const updated = new Date(ratesData.updated_at);
   const stale = ratesData.stale || Date.now() > new Date(ratesData.expires_at).getTime() + 60_000;
   const offline = !navigator.onLine || ratesData._offline;
-  let text = `Updated ${timeAgo(updated)}`;
-  if (offline) text = `Offline · rates from ${updated.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}`;
-  else if (stale) text += " · may be out of date";
+  let text = t("updated", { when: timeAgo(updated) });
+  if (offline) text = t("offlineFrom", { time: updated.toLocaleTimeString(I18n.lang, { hour: "2-digit", minute: "2-digit" }) });
+  else if (stale) text += ` · ${t("mayBeOld")}`;
   statusEl.textContent = text;
   statusEl.classList.toggle("warn", offline || stale);
-  statusEl.title = `Rates updated ${updated.toLocaleString()}`;
+  statusEl.title = t("ratesUpdatedAt", { when: updated.toLocaleString(I18n.lang) });
 
   const used = new Set(prefs.currencies.map((c) => ratesData.sources?.[c]).filter((s) => s && s !== "fixed"));
   sourceEl.textContent = used.size
-    ? `Rates via ${[...used].map(sourceLabel).join(", ")} · refreshed every ${Math.round(ratesData.ttl / 60)} min`
+    ? t("ratesVia", { sources: [...used].map(sourceLabel).join(", "), n: Math.round(ratesData.ttl / 60) })
     : "";
 }
 
 function sourceLabel(s) {
-  return { yahoo: "Yahoo Finance", "open.er-api": "ExchangeRate-API", stale: "cache" }[s] || s;
+  return { yahoo: "Yahoo Finance", "open.er-api": "ExchangeRate-API", stale: t("srcCache") }[s] || s;
 }
 
 // ---------- actions ----------
@@ -419,7 +422,7 @@ function setEditing(on) {
   editing = on;
   if (on && activeInput) stopEditing();
   editBtn.setAttribute("aria-pressed", String(on));
-  editBtn.textContent = on ? "Done" : "Edit";
+  editBtn.textContent = t(on ? "done" : "edit");
   listEl.classList.toggle("editing", on);
 }
 
@@ -428,8 +431,10 @@ function setEditing(on) {
 function renderPicker() {
   const q = pickerSearch.value.trim().toLowerCase();
   pickerList.replaceChildren();
-  for (const [code, name] of Object.entries(currencies)) {
-    if (q && !code.toLowerCase().includes(q) && !name.toLowerCase().includes(q)) continue;
+  for (const [code, englishName] of Object.entries(currencies)) {
+    const name = I18n.currencyName(code, englishName);
+    // Match the code and both the displayed and English names, so English searches still work in Chinese.
+    if (q && ![code, name, englishName].some((v) => v.toLowerCase().includes(q))) continue;
     const li = document.createElement("li");
     const label = document.createElement("label");
     const cb = document.createElement("input");
@@ -457,6 +462,22 @@ function openPicker() {
   pickerSearch.focus();
 }
 
+// ---------- language ----------
+
+// Re-translates everything on screen; called at startup and whenever the language changes.
+function applyLanguage() {
+  I18n.setChoice(prefs.lang);
+  langSelect.value = prefs.lang || "system";
+  document.title = t("title");
+  I18n.apply(document);
+  setEditing(editing);
+  if (prefs.currencies) {
+    renderList();
+    renderStatus();
+  }
+  if (picker.open) renderPicker();
+}
+
 // ---------- theme ----------
 
 const darkQuery = matchMedia("(prefers-color-scheme: dark)");
@@ -468,6 +489,7 @@ function applyTheme() {
   const bg = getComputedStyle(document.documentElement).getPropertyValue("--bg").trim();
   document.querySelector('meta[name="theme-color"]').setAttribute("content", bg);
   themeSelect.value = choice;
+  $("#theme-icon").textContent = { system: "◐", light: "☀️", dark: "🌙" }[choice] || "◐";
 }
 
 // ---------- data loading ----------
@@ -601,6 +623,7 @@ function setupPullToRefresh() {
 
 async function init() {
   applyTheme();
+  I18n.setChoice(prefs.lang);
 
   ratesData = loadJSON(RATES_KEY, null); // show cached rates instantly
   // Use the saved currency list so the first render doesn't wait for the network
@@ -631,7 +654,7 @@ async function init() {
   delete prefs.keypad; // obsolete: the keypad used to be optional
   savePrefs();
 
-  renderList();
+  applyLanguage();
   document.documentElement.classList.remove("booting"); // see the inline script in index.html
   renderStatus();
   refreshRates();
@@ -645,6 +668,14 @@ async function init() {
     applyTheme();
   });
   darkQuery.addEventListener("change", applyTheme);
+  langSelect.addEventListener("change", () => {
+    prefs.lang = langSelect.value;
+    savePrefs();
+    applyLanguage();
+  });
+  window.addEventListener("languagechange", () => {
+    if (!prefs.lang || prefs.lang === "system") applyLanguage();
+  });
 
   // Re-fetch whenever the app comes back to the foreground or is restored from the back/forward cache.
   document.addEventListener("visibilitychange", () => {
@@ -669,8 +700,7 @@ async function init() {
     if (e.key === PREFS_KEY && e.newValue) {
       prefs = JSON.parse(e.newValue);
       applyTheme();
-      renderList();
-      renderStatus();
+      applyLanguage();
     }
   });
 }

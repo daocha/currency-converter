@@ -14,7 +14,7 @@ def test_index_assets_carry_content_hash_versions():
     for name in VERSIONED_ASSETS:
         expected = hashlib.sha256((STATIC_DIR / name).read_bytes()).hexdigest()[:10]
         assert f'"{name}?v={expected}"' in resp.text
-    assert not re.search(r'"(styles\.css|calc\.js|app\.js)"', resp.text)
+    assert not re.search(r'"(styles\.css|calc\.js|i18n\.js|app\.js)"', resp.text)
     assert client.get("/index.html").text == resp.text
 
 
@@ -27,5 +27,5 @@ def test_index_revalidates_with_etag():
 
 def test_versioned_asset_urls_are_served():
     html = client.get("/").text
-    for url in re.findall(r'(?:href|src)="((?:styles\.css|calc\.js|app\.js)\?v=\w+)"', html):
+    for url in re.findall(r'(?:href|src)="((?:styles\.css|calc\.js|i18n\.js|app\.js)\?v=\w+)"', html):
         assert client.get("/" + url).status_code == 200
