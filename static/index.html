@@ -46,7 +46,16 @@
         <span id="status" class="status" aria-live="polite">Loading rates…</span>
         <button id="refresh-btn" class="icon-btn refresh" title="Refresh rates" aria-label="Refresh rates">↻</button>
       </div>
-      <button id="edit-btn" class="btn ghost" aria-pressed="false">Edit</button>
+      <div class="toolbar-actions">
+        <button id="keypad-toggle" class="icon-btn keypad-toggle" title="Calculator keypad" aria-label="Calculator keypad" aria-pressed="false">
+          <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" fill="currentColor">
+            <rect x="3" y="3" width="5" height="5" rx="1.2"/><rect x="9.5" y="3" width="5" height="5" rx="1.2"/><rect x="16" y="3" width="5" height="5" rx="1.2"/>
+            <rect x="3" y="9.5" width="5" height="5" rx="1.2"/><rect x="9.5" y="9.5" width="5" height="5" rx="1.2"/><rect x="16" y="9.5" width="5" height="5" rx="1.2"/>
+            <rect x="3" y="16" width="5" height="5" rx="1.2"/><rect x="9.5" y="16" width="5" height="5" rx="1.2"/><rect x="16" y="16" width="5" height="5" rx="1.2"/>
+          </svg>
+        </button>
+        <button id="edit-btn" class="btn ghost" aria-pressed="false">Edit</button>
+      </div>
     </div>
 
     <ul id="currency-list" class="currency-list"></ul>
@@ -68,6 +77,38 @@
     </form>
   </dialog>
 
+  <div id="keypad" class="keypad" hidden>
+    <div class="keypad-inner" role="group" aria-label="Calculator keypad">
+      <div class="keypad-head">
+        <span id="keypad-target" class="keypad-target"></span>
+        <span id="keypad-preview" class="keypad-preview" aria-live="polite"></span>
+        <button type="button" class="keypad-done" data-action="done">Done</button>
+      </div>
+      <div class="keypad-grid">
+        <button type="button" class="fn" data-action="clear" aria-label="Clear">C</button>
+        <button type="button" class="fn" data-insert="(" aria-label="Open parenthesis">(</button>
+        <button type="button" class="fn" data-insert=")" aria-label="Close parenthesis">)</button>
+        <button type="button" class="op" data-insert="÷" aria-label="Divide">÷</button>
+        <button type="button" data-insert="7">7</button>
+        <button type="button" data-insert="8">8</button>
+        <button type="button" data-insert="9">9</button>
+        <button type="button" class="op" data-insert="×" aria-label="Times">×</button>
+        <button type="button" data-insert="4">4</button>
+        <button type="button" data-insert="5">5</button>
+        <button type="button" data-insert="6">6</button>
+        <button type="button" class="op" data-insert="−" aria-label="Minus">−</button>
+        <button type="button" data-insert="1">1</button>
+        <button type="button" data-insert="2">2</button>
+        <button type="button" data-insert="3">3</button>
+        <button type="button" class="op" data-insert="+" aria-label="Plus">+</button>
+        <button type="button" data-insert="0">0</button>
+        <button type="button" data-insert="." aria-label="Decimal point">.</button>
+        <button type="button" class="fn" data-action="backspace" aria-label="Backspace">⌫</button>
+        <button type="button" class="equals" data-action="equals" aria-label="Equals">=</button>
+      </div>
+    </div>
+  </div>
+
   <template id="row-template">
     <li class="row">
       <span class="flag" aria-hidden="true"></span>
@@ -87,6 +128,7 @@
     </li>
   </template>
 
+  <script src="calc.js" defer></script>
   <script src="app.js" defer></script>
 </body>
 </html>
