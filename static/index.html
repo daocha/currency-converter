@@ -29,15 +29,25 @@
 <body>
   <div id="ptr" class="ptr" aria-hidden="true"><span class="ptr-icon">↻</span></div>
   <header class="topbar">
-    <h1>Currency Converter</h1>
+    <h1 data-i18n="title">Currency Converter</h1>
     <div class="actions">
-      <button id="install-btn" class="btn ghost" hidden>Install</button>
-      <label class="theme-picker">
-        <span class="sr-only">Theme</span>
-        <select id="theme-select" aria-label="Theme">
-          <option value="system">System</option>
-          <option value="light">Light</option>
-          <option value="dark">Dark</option>
+      <button id="install-btn" class="btn ghost" data-i18n="install" hidden>Install</button>
+      <label class="icon-select lang-picker">
+        <span class="select-icon" aria-hidden="true">🌐</span>
+        <span class="sr-only" data-i18n="language">Language</span>
+        <select id="lang-select" aria-label="Language" data-i18n-attrs="aria-label:language">
+          <option value="system" data-i18n="system">System</option>
+          <option value="en">English</option>
+          <option value="zh-TW">繁體中文</option>
+        </select>
+      </label>
+      <label class="icon-select theme-picker">
+        <span id="theme-icon" class="select-icon" aria-hidden="true">◐</span>
+        <span class="sr-only" data-i18n="theme">Theme</span>
+        <select id="theme-select" aria-label="Theme" data-i18n-attrs="aria-label:theme">
+          <option value="system" data-i18n="system">System</option>
+          <option value="light" data-i18n="light">Light</option>
+          <option value="dark" data-i18n="dark">Dark</option>
         </select>
       </label>
     </div>
@@ -46,15 +56,15 @@
   <main>
     <div class="toolbar">
       <div class="status-wrap">
-        <span id="status" class="status" aria-live="polite">Loading rates…</span>
-        <button id="refresh-btn" class="icon-btn refresh" title="Refresh rates" aria-label="Refresh rates">↻</button>
+        <span id="status" class="status" aria-live="polite" data-i18n="loadingRates">Loading rates…</span>
+        <button id="refresh-btn" class="icon-btn refresh" title="Refresh rates" aria-label="Refresh rates" data-i18n-attrs="title:refreshRates,aria-label:refreshRates">↻</button>
       </div>
-      <button id="edit-btn" class="btn ghost" aria-pressed="false">Edit</button>
+      <button id="edit-btn" class="btn ghost" aria-pressed="false" data-i18n="edit">Edit</button>
     </div>
 
     <ul id="currency-list" class="currency-list"></ul>
 
-    <button id="add-btn" class="btn primary block">+ Add currency</button>
+    <button id="add-btn" class="btn primary block" data-i18n="addCurrency">+ Add currency</button>
   </main>
 
   <footer class="footer">
@@ -64,41 +74,41 @@
   <dialog id="picker">
     <form method="dialog" class="picker">
       <div class="picker-head">
-        <input id="picker-search" type="search" placeholder="Search currencies" autocomplete="off" aria-label="Search currencies">
-        <button class="btn ghost" value="close">Done</button>
+        <input id="picker-search" type="search" placeholder="Search currencies" autocomplete="off" aria-label="Search currencies" data-i18n-attrs="placeholder:searchCurrencies,aria-label:searchCurrencies">
+        <button class="btn ghost" value="close" data-i18n="done">Done</button>
       </div>
       <ul id="picker-list" class="picker-list"></ul>
     </form>
   </dialog>
 
   <div id="keypad" class="keypad" hidden>
-    <div class="keypad-inner" role="group" aria-label="Calculator keypad">
+    <div class="keypad-inner" role="group" aria-label="Calculator keypad" data-i18n-attrs="aria-label:keypad">
       <div class="keypad-head">
         <span id="keypad-target" class="keypad-target"></span>
         <span id="keypad-preview" class="keypad-preview" aria-live="polite"></span>
-        <button type="button" class="keypad-done" data-action="done">Done</button>
+        <button type="button" class="keypad-done" data-action="done" data-i18n="done">Done</button>
       </div>
       <div class="keypad-grid">
-        <button type="button" class="fn" data-action="clear" aria-label="Clear">C</button>
-        <button type="button" class="fn" data-insert="(" aria-label="Open parenthesis">(</button>
-        <button type="button" class="fn" data-insert=")" aria-label="Close parenthesis">)</button>
-        <button type="button" class="op" data-insert="÷" aria-label="Divide">÷</button>
+        <button type="button" class="fn" data-action="clear" aria-label="Clear" data-i18n-attrs="aria-label:clear">C</button>
+        <button type="button" class="fn" data-insert="(" aria-label="Open parenthesis" data-i18n-attrs="aria-label:openParen">(</button>
+        <button type="button" class="fn" data-insert=")" aria-label="Close parenthesis" data-i18n-attrs="aria-label:closeParen">)</button>
+        <button type="button" class="op" data-insert="÷" aria-label="Divide" data-i18n-attrs="aria-label:divide">÷</button>
         <button type="button" data-insert="7">7</button>
         <button type="button" data-insert="8">8</button>
         <button type="button" data-insert="9">9</button>
-        <button type="button" class="op" data-insert="×" aria-label="Times">×</button>
+        <button type="button" class="op" data-insert="×" aria-label="Times" data-i18n-attrs="aria-label:times">×</button>
         <button type="button" data-insert="4">4</button>
         <button type="button" data-insert="5">5</button>
         <button type="button" data-insert="6">6</button>
-        <button type="button" class="op" data-insert="−" aria-label="Minus">−</button>
+        <button type="button" class="op" data-insert="−" aria-label="Minus" data-i18n-attrs="aria-label:minus">−</button>
         <button type="button" data-insert="1">1</button>
         <button type="button" data-insert="2">2</button>
         <button type="button" data-insert="3">3</button>
-        <button type="button" class="op" data-insert="+" aria-label="Plus">+</button>
+        <button type="button" class="op" data-insert="+" aria-label="Plus" data-i18n-attrs="aria-label:plus">+</button>
         <button type="button" data-insert="0">0</button>
-        <button type="button" data-insert="." aria-label="Decimal point">.</button>
-        <button type="button" class="fn" data-action="backspace" aria-label="Backspace">⌫</button>
-        <button type="button" class="equals" data-action="equals" aria-label="Equals">=</button>
+        <button type="button" data-insert="." aria-label="Decimal point" data-i18n-attrs="aria-label:decimal">.</button>
+        <button type="button" class="fn" data-action="backspace" aria-label="Backspace" data-i18n-attrs="aria-label:backspace">⌫</button>
+        <button type="button" class="equals" data-action="equals" aria-label="Equals" data-i18n-attrs="aria-label:equals">=</button>
       </div>
     </div>
   </div>
@@ -115,14 +125,15 @@
         <span class="hint"></span>
       </div>
       <div class="edit-controls">
-        <button class="icon-btn up" title="Move up" aria-label="Move up">↑</button>
-        <button class="icon-btn down" title="Move down" aria-label="Move down">↓</button>
-        <button class="icon-btn remove" title="Remove" aria-label="Remove">✕</button>
+        <button class="icon-btn up" title="Move up" aria-label="Move up" data-i18n-attrs="title:moveUp,aria-label:moveUp">↑</button>
+        <button class="icon-btn down" title="Move down" aria-label="Move down" data-i18n-attrs="title:moveDown,aria-label:moveDown">↓</button>
+        <button class="icon-btn remove" title="Remove" aria-label="Remove" data-i18n-attrs="title:remove,aria-label:remove">✕</button>
       </div>
     </li>
   </template>
 
   <script src="calc.js" defer></script>
+  <script src="i18n.js" defer></script>
   <script src="app.js" defer></script>
 </body>
 </html>

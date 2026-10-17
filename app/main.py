@@ -137,7 +137,7 @@ async def healthz(request: Request):
 
 
 # index.html references these; each gets a ?v=<content hash> so browsers load new files after a deploy.
-VERSIONED_ASSETS = ("styles.css", "calc.js", "app.js")
+VERSIONED_ASSETS = ("styles.css", "calc.js", "i18n.js", "app.js")
 _index_cache: dict = {}
 
 
