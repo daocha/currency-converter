@@ -576,37 +576,59 @@ function plainAmount(value, code) {
   return new Intl.NumberFormat("en-US", { ...digits, useGrouping: false }).format(value);
 }
 
-async function copyRowValue(row) {
+// Copies the row's amount; resolves to true on success, false on failure, null if there is nothing to copy.
+async function copyRowValue(row, toastOnFailure = true) {
   const code = row.dataset.code;
   const value = code === prefs.baseCode ? prefs.baseAmount : convert(prefs.baseAmount, prefs.baseCode, code);
   const text = plainAmount(value, code);
-  if (!text) return;
-  showToast((await copyText(text)) ? t("copied", { value: `${text} ${code}` }) : t("copyFailed"));
+  if (!text) return null;
+  const ok = await copyText(text);
+  if (ok) showToast(t("copied", { value: `${text} ${code}` }));
+  else if (toastOnFailure) showToast(t("copyFailed"));
+  return ok;
 }
 
+// Browsers only allow copying shortly after a user action. A touch press (pointerdown) does not count as
+// one, only lifting the finger does, so a copy fired from the 500 ms timer fails unless the user happened to
+// interact within the last few seconds (typically the first copy after a page load). So the timer only
+// "arms" the press and tries once; the release then copies if that attempt didn't succeed.
 function setupCopy() {
   let timer = null;
+  let armedRow = null;   // the row whose press has lasted long enough
+  let copied = false;
   let startX = 0;
   let startY = 0;
-  const cancel = () => clearTimeout(timer);
+  const cancelTimer = () => clearTimeout(timer);
 
   listEl.addEventListener("pointerdown", (e) => {
     const row = e.target.closest(".row");
     if (editing || !row || !e.target.closest(".value") || e.button > 0) return;
     startX = e.clientX;
     startY = e.clientY;
-    cancel();
-    timer = setTimeout(() => {
+    armedRow = null;
+    cancelTimer();
+    timer = setTimeout(async () => {
+      armedRow = row;
+      copied = false;
       lastLongPress = Date.now();
       if (navigator.vibrate) navigator.vibrate(15);
-      copyRowValue(row);
+      copied = (await copyRowValue(row, false)) !== false; // a failure is reported only after the release attempt
     }, LONG_PRESS_MS);
   });
   listEl.addEventListener("pointermove", (e) => {
-    if (Math.hypot(e.clientX - startX, e.clientY - startY) > 8) cancel(); // scrolling, not pressing
+    if (!armedRow && Math.hypot(e.clientX - startX, e.clientY - startY) > 8) cancelTimer(); // scrolling
   });
-  for (const type of ["pointerup", "pointercancel", "pointerleave"]) listEl.addEventListener(type, cancel);
-  window.addEventListener("scroll", cancel, { passive: true });
+  const release = async () => {
+    cancelTimer();
+    const row = armedRow;
+    armedRow = null;
+    if (!row) return;
+    lastLongPress = Date.now();
+    if (!copied) await copyRowValue(row);
+  };
+  for (const type of ["pointerup", "pointercancel"]) listEl.addEventListener(type, release);
+  listEl.addEventListener("pointerleave", () => { if (!armedRow) cancelTimer(); });
+  window.addEventListener("scroll", () => { if (!armedRow) cancelTimer(); }, { passive: true });
   // Long-press opens the browser's text menu on touch devices; we use it for copying instead.
   listEl.addEventListener("contextmenu", (e) => {
     if (e.target.closest(".value")) e.preventDefault();
