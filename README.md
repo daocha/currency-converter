@@ -1,4 +1,6 @@
-# 💱 currency-converter
+<img src="fx-banner.png" alt="FX / Currency Converter"/>
+
+# currency-converter
 
 A small currency converter web app with near-real-time FX rates and history charts. You can install it as a PWA (an app-like install from the browser).
 
