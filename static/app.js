@@ -760,6 +760,14 @@ function setupChart() {
     });
   }
   chartDialog.addEventListener("close", () => { chartToken++; });
+  // A tap on the backdrop (the dialog element itself, outside its content) closes the chart. Both the press and
+  // the release must be there, so a scrub that merely ends outside the chart doesn't close it.
+  let pressedBackdrop = false;
+  chartDialog.addEventListener("pointerdown", (e) => { pressedBackdrop = e.target === chartDialog; });
+  chartDialog.addEventListener("click", (e) => {
+    if (e.target === chartDialog && pressedBackdrop) chartDialog.close();
+    pressedBackdrop = false;
+  });
   window.addEventListener("resize", () => { if (chartDialog.open && chartPoints.length) drawChart(); });
 }
 

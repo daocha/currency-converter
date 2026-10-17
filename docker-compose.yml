@@ -13,4 +13,10 @@ services:
       LOG_LEVEL: "${LOG_LEVEL:-warning}"
       # Only needed if your reverse proxy forwards /fx/... without stripping the prefix.
       BASE_PATH: "${BASE_PATH:-}"
+    volumes:
+      # Chart history lives here; without it the chart re-backfills (up to 1 year of daily data) after a rebuild.
+      - fx-data:/data
     restart: unless-stopped
+
+volumes:
+  fx-data:

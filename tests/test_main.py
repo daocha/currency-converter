@@ -36,20 +36,24 @@ def test_history_rejects_bad_params():
     assert client.get("/api/history?base=USD&quote=JPY&range=5y").status_code == 400
 
 
-def test_history_returns_points(monkeypatch):
-    async def fake(http, base, quote, rng):
-        return [[1700000000, 150.5], [1700086400, 151.0]]
+class FakeHistory:
+    def __init__(self, result=None, error=None):
+        self.result, self.error = result, error
 
-    monkeypatch.setattr("app.main.get_history", fake)
-    app.state.http = None
+    async def get(self, base, quote, rng):
+        if self.error:
+            raise self.error
+        return self.result
+
+
+def test_history_returns_points():
+    app.state.history = FakeHistory([[1700000000, 150.5], [1700086400, 151.0]])
     data = client.get("/api/history?base=usd&quote=jpy&range=1w").json()
     assert data == {"base": "USD", "quote": "JPY", "range": "1w", "points": [[1700000000, 150.5], [1700086400, 151.0]]}
 
 
-def test_history_unavailable_is_503(monkeypatch):
-    async def fake(http, base, quote, rng):
-        raise RuntimeError("down")
-
-    monkeypatch.setattr("app.main.get_history", fake)
-    app.state.http = None
+def test_history_unavailable_is_503():
+    app.state.history = FakeHistory(error=RuntimeError("down"))
+    assert client.get("/api/history?base=USD&quote=JPY").status_code == 503
+    app.state.history = FakeHistory([])
     assert client.get("/api/history?base=USD&quote=JPY").status_code == 503

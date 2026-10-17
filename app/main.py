@@ -15,7 +15,7 @@ from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, Redirect
 from fastapi.staticfiles import StaticFiles
 
 from .currencies import CURRENCIES, DEFAULT_SELECTION
-from .history import RANGES, get_history
+from .history import RANGES, HistoryService, HistoryStore
 from .rates import RateService
 
 logging.basicConfig(
@@ -33,6 +33,9 @@ REFRESH_MARGIN_SECONDS = float(_margin) if _margin else None
 # The app keeps serving "/" too, so http://<ip>:8000/ works either way.
 _base = os.getenv("BASE_PATH", "").strip("/")
 BASE_PATH = f"/{_base}" if _base else ""
+# SQLite file with the stored FX history; keep it on a persistent volume (and outside app/, which
+# the dev server watches for reloads).
+HISTORY_DB = os.getenv("HISTORY_DB") or str(Path(__file__).resolve().parent.parent / "data" / "history.db")
 # Yahoo answers 429 to full browser UA strings sent without browser cookies; a bare one works.
 USER_AGENT = "Mozilla/5.0"
 
@@ -51,12 +54,15 @@ async def lifespan(app: FastAPI):
             refresh_margin=REFRESH_MARGIN_SECONDS,
         )
         app.state.rates = service
-        app.state.http = client
+        history = HistoryService(list(CURRENCIES), client, HistoryStore(HISTORY_DB))
+        app.state.history = history
         log.debug("cache TTL %ss, refreshing %ss before expiry", service.ttl, service.refresh_margin)
         service.start()
+        history.start()
         try:
             yield
         finally:
+            await history.stop()
             await service.stop()
 
 
@@ -138,7 +144,7 @@ async def history(request: Request, base: str, quote: str, range: str = "1m"):
     if base not in CURRENCIES or quote not in CURRENCIES or range not in RANGES:
         return JSONResponse({"error": "invalid base, quote or range"}, status_code=400)
     try:
-        points = await get_history(request.app.state.http, base, quote, range)
+        points = await request.app.state.history.get(base, quote, range)
     except Exception as exc:  # noqa: BLE001
         log.warning("history %s/%s %s failed: %s", base, quote, range, exc)
         points = []

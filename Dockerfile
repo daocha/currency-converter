@@ -13,13 +13,18 @@ RUN pip install -r requirements.txt
 COPY app ./app
 COPY static ./static
 
-RUN useradd --create-home --uid 10001 appuser
+RUN useradd --create-home --uid 10001 appuser \
+    && mkdir /data && chown appuser /data
 USER appuser
 
 ENV HOST=0.0.0.0 \
     PORT=8000 \
     CACHE_TTL_SECONDS=300 \
+    HISTORY_DB=/data/history.db \
     LOG_LEVEL=warning
+
+# Stored FX history (chart data). Mount a volume here so it survives container rebuilds.
+VOLUME /data
 
 EXPOSE 8000
 
