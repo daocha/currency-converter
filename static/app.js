@@ -17,7 +17,10 @@ const pickerList = $("#picker-list");
 const pickerSearch = $("#picker-search");
 const rowTemplate = $("#row-template");
 const refreshBtn = $("#refresh-btn");
-const calcBar = $("#calc-bar");
+const keypad = $("#keypad");
+const keypadTarget = $("#keypad-target");
+const keypadPreview = $("#keypad-preview");
+const keypadToggle = $("#keypad-toggle");
 const ptrEl = $("#ptr");
 
 let currencies = {};       // code -> name
@@ -132,8 +135,9 @@ function renderList() {
     const input = row.querySelector(".amount");
     input.setAttribute("aria-label", `Amount in ${code}`);
     input.addEventListener("input", () => onAmountInput(code, input));
-    input.addEventListener("focus", () => onAmountFocus(row, input));
-    input.addEventListener("blur", () => onAmountBlur());
+    input.inputMode = keypadEnabled() ? "none" : "decimal";
+    input.addEventListener("focus", () => onAmountFocus(input));
+    input.addEventListener("blur", onAmountBlur);
     input.addEventListener("keydown", (e) => {
       if (e.key === "Enter" || e.key === "=") {
         e.preventDefault();
@@ -148,6 +152,11 @@ function renderList() {
     up.addEventListener("click", () => moveCurrency(idx, -1));
     down.addEventListener("click", () => moveCurrency(idx, 1));
     row.querySelector(".remove").addEventListener("click", () => removeCurrency(code));
+    // Tapping anywhere on a row edits its amount.
+    row.addEventListener("click", (e) => {
+      if (editing || input.disabled || e.target === input || e.target.closest(".edit-controls")) return;
+      input.focus();
+    });
 
     listEl.append(row);
   });
@@ -189,6 +198,7 @@ function updateValues() {
       hint.textContent = `1 ${base} = ${formatRate(convert(1, base, code))} ${code}`;
     }
   }
+  updateKeypadHead();
 }
 
 function renderStatus() {
@@ -227,35 +237,87 @@ function onAmountInput(code, input) {
 }
 
 // Replace a typed calculation with its result, keeping focus so the user can continue.
+// The result is selected, so typing a digit starts a new number and an operator continues it.
 function commitAmount(code, input) {
   if (prefs.baseCode !== code) onAmountInput(code, input);
   input.value = formatAmount(prefs.baseAmount, code);
+  input.select();
   updateValues();
 }
 
-// ---------- calculator bar ----------
+// ---------- calculator keypad ----------
 
-let calcInput = null;      // the amount field the bar is attached to
-let calcPressing = false;  // a bar button is being pressed; ignore the resulting blur
+const coarsePointer = matchMedia("(pointer: coarse)");
+let activeInput = null;  // the amount field being edited
 
-function onAmountFocus(row, input) {
-  calcInput = input;
-  row.append(calcBar);
-  calcBar.hidden = false;
-  input.select();
+// On by default on touch screens; the toolbar toggle overrides it (saved in prefs).
+function keypadEnabled() {
+  return prefs.keypad ?? coarsePointer.matches;
 }
 
-function onAmountBlur() {
-  if (calcPressing) return;
-  calcBar.hidden = true;
-  calcInput = null;
-  updateValues(); // re-format, which also commits a calculation to its result
+function applyKeypadMode() {
+  const on = keypadEnabled();
+  keypadToggle.setAttribute("aria-pressed", String(on));
+  // "none" keeps the caret but stops the system keyboard from opening.
+  for (const input of listEl.querySelectorAll(".amount")) input.inputMode = on ? "none" : "decimal";
+  if (!on) hideKeypad();
+  else if (activeInput) showKeypad();
+}
+
+function showKeypad() {
+  keypad.hidden = false;
+  document.body.classList.add("keypad-open");
+  document.body.style.setProperty("--keypad-h", `${keypad.offsetHeight}px`);
+  updateKeypadHead();
+  requestAnimationFrame(() => {
+    // Keep the row being edited visible above the keypad.
+    const row = activeInput && activeInput.closest(".row");
+    if (!row) return;
+    const rect = row.getBoundingClientRect();
+    const limit = window.innerHeight - keypad.offsetHeight - 8;
+    if (rect.bottom > limit) window.scrollBy({ top: rect.bottom - limit, behavior: "smooth" });
+    else if (rect.top < 8) window.scrollBy({ top: rect.top - 8, behavior: "smooth" });
+  });
+}
+
+function hideKeypad() {
+  keypad.hidden = true;
+  document.body.classList.remove("keypad-open");
+}
+
+function updateKeypadHead() {
+  if (!activeInput || keypad.hidden) return;
+  const code = activeInput.closest(".row").dataset.code;
+  keypadTarget.textContent = `${flagFor(code)} ${code}`;
+  const showResult = Calc.isExpression(activeInput.value) && prefs.baseAmount != null;
+  keypadPreview.textContent = showResult ? `= ${formatAmount(prefs.baseAmount, code)}` : "";
+}
+
+function onAmountFocus(input) {
+  activeInput = input;
+  input.select();
+  if (keypadEnabled()) showKeypad();
+}
+
+function onAmountBlur(e) {
+  // Never let the keypad steal focus from the field it is typing into.
+  if (e.relatedTarget && keypad.contains(e.relatedTarget)) {
+    e.target.focus({ preventScroll: true });
+    return;
+  }
+  // Focus may be moving to another amount field; keep the keypad open in that case.
+  setTimeout(() => {
+    if (document.activeElement && document.activeElement.classList.contains("amount")) return;
+    activeInput = null;
+    hideKeypad();
+    updateValues(); // re-format, which also commits a calculation to its result
+  }, 0);
 }
 
 function insertIntoAmount(input, text) {
   let start = input.selectionStart ?? input.value.length;
   let end = input.selectionEnd ?? input.value.length;
-  // On focus the whole value is selected; an operator should extend it, not replace it.
+  // When the whole value is selected (on focus, after "="), an operator extends it instead of replacing it.
   if ("+−×÷".includes(text) && input.value && start === 0 && end === input.value.length) {
     start = end = input.value.length;
   }
@@ -263,28 +325,66 @@ function insertIntoAmount(input, text) {
   input.dispatchEvent(new Event("input", { bubbles: true }));
 }
 
-function setupCalcBar() {
-  // Keep focus (and the mobile keyboard) on the amount field while pressing bar buttons.
-  calcBar.addEventListener("pointerdown", () => (calcPressing = true));
-  calcBar.addEventListener("mousedown", (e) => e.preventDefault());
-  // Runs after the click (or if the press was cancelled / released elsewhere).
-  const release = () => {
-    if (!calcPressing) return;
-    setTimeout(() => {
-      calcPressing = false;
-      if (calcInput && document.activeElement !== calcInput) onAmountBlur();
-    }, 0);
-  };
-  window.addEventListener("pointerup", release);
-  window.addEventListener("pointercancel", release);
-  calcBar.addEventListener("click", (e) => {
+function backspaceAmount(input) {
+  let start = input.selectionStart ?? input.value.length;
+  const end = input.selectionEnd ?? input.value.length;
+  if (start === end) {
+    if (start === 0) return;
+    start -= 1;
+  }
+  input.setRangeText("", start, end, "end");
+  input.dispatchEvent(new Event("input", { bubbles: true }));
+}
+
+function pressKey(btn) {
+  const input = activeInput;
+  if (!input) return;
+  const { insert, action } = btn.dataset;
+  if (action === "done") {
+    input.blur();
+    return;
+  }
+  const code = input.closest(".row").dataset.code;
+  if (insert) insertIntoAmount(input, insert);
+  else if (action === "backspace") backspaceAmount(input);
+  else if (action === "clear") {
+    input.value = "";
+    input.dispatchEvent(new Event("input", { bubbles: true }));
+  } else if (action === "equals") commitAmount(code, input);
+}
+
+function setupKeypad() {
+  // Act on press, like a hardware keypad. preventDefault stops the browser from moving
+  // focus to the button, so the amount field (and its caret) stays active.
+  let pressedByPointer = false;
+  keypad.addEventListener("pointerdown", (e) => {
+    e.preventDefault(); // also for taps between keys, which would otherwise close the keypad
     const btn = e.target.closest("button");
-    const input = calcInput;
-    if (!btn || !input) return;
-    if (document.activeElement !== input) input.focus({ preventScroll: true });
-    const code = input.closest(".row").dataset.code;
-    if (btn.dataset.action === "equals") commitAmount(code, input);
-    else insertIntoAmount(input, btn.dataset.insert);
+    // "Done" closes the keypad, so it waits for the release (click). Acting on press would
+    // hide the keypad mid-tap and let the release land on the row underneath, focusing it.
+    if (!btn || btn.dataset.action === "done") return;
+    pressedByPointer = true;
+    pressKey(btn);
+  });
+  // Handles "Done", plus keyboard / screen-reader activation (a click without a pointer press).
+  keypad.addEventListener("click", (e) => {
+    const btn = e.target.closest("button");
+    if (pressedByPointer && !(btn && btn.dataset.action === "done")) {
+      pressedByPointer = false;
+      return;
+    }
+    pressedByPointer = false;
+    if (btn) pressKey(btn);
+  });
+
+  keypadToggle.addEventListener("click", () => {
+    prefs.keypad = !keypadEnabled();
+    savePrefs();
+    applyKeypadMode();
+  });
+  coarsePointer.addEventListener("change", applyKeypadMode);
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape" && activeInput) activeInput.blur();
   });
 }
 
@@ -321,6 +421,7 @@ function removeCurrency(code) {
 
 function setEditing(on) {
   editing = on;
+  if (on && activeInput) activeInput.blur();
   editBtn.setAttribute("aria-pressed", String(on));
   editBtn.textContent = on ? "Done" : "Edit";
   listEl.classList.toggle("editing", on);
@@ -445,6 +546,7 @@ function setupPullToRefresh() {
 
   window.addEventListener("touchstart", (e) => {
     if (window.scrollY > 0 || picker.open || e.touches.length !== 1 || ptrEl.classList.contains("refreshing")) return;
+    if (e.target.closest("#keypad")) return;
     startY = e.touches[0].clientY;
     pull = 0;
   }, { passive: true });
@@ -525,7 +627,8 @@ async function init() {
   window.addEventListener("online", refreshRates);
   refreshBtn.addEventListener("click", refreshRates);
   setupPullToRefresh();
-  setupCalcBar();
+  setupKeypad();
+  applyKeypadMode();
   window.addEventListener("offline", renderStatus);
   setInterval(renderStatus, 30_000);
 

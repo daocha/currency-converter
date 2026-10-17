@@ -194,29 +194,6 @@ select {
 
 .hint { font-size: 0.75rem; color: var(--muted); padding-right: 7px; font-variant-numeric: tabular-nums; white-space: nowrap; }
 
-.calc-bar {
-  grid-column: 1 / -1;
-  display: flex;
-  gap: 6px;
-}
-.calc-bar[hidden], .editing .calc-bar { display: none; }
-.calc-bar button {
-  flex: 1;
-  height: 40px;
-  border: 1px solid var(--border);
-  border-radius: 10px;
-  background: var(--surface);
-  color: var(--text);
-  font: inherit;
-  font-size: 1.15rem;
-  font-weight: 600;
-  cursor: pointer;
-  touch-action: manipulation;
-}
-.calc-bar button:hover { background: var(--surface-2); }
-.calc-bar button:active { background: var(--border); }
-.calc-bar .equals { background: var(--accent); border-color: var(--accent); color: var(--accent-contrast); }
-
 .edit-controls { display: none; gap: 4px; }
 .editing .edit-controls { display: flex; }
 
@@ -232,6 +209,83 @@ select {
 .icon-btn:hover { background: var(--surface-2); }
 .icon-btn:disabled { opacity: 0.35; cursor: default; }
 .icon-btn.remove { color: var(--danger); }
+
+.toolbar-actions { display: flex; align-items: center; gap: 8px; }
+.icon-btn.keypad-toggle { width: 36px; height: 34px; display: inline-flex; align-items: center; justify-content: center; color: var(--muted); }
+.icon-btn.keypad-toggle[aria-pressed="true"] { color: var(--accent); border-color: var(--accent); }
+
+.row:not(.editing .row) { cursor: text; }
+
+/* ---------- calculator keypad ---------- */
+.keypad {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 30;
+  background: var(--surface);
+  border-top: 1px solid var(--border);
+  box-shadow: 0 -8px 24px rgba(0, 0, 0, 0.14);
+  padding: 8px 12px calc(12px + env(safe-area-inset-bottom));
+  transition: transform 0.18s ease;
+}
+.keypad[hidden] {
+  display: block;
+  visibility: hidden;
+  transform: translateY(105%);
+  transition: transform 0.18s ease, visibility 0s linear 0.18s;
+}
+.keypad-inner { max-width: 640px; margin: 0 auto; }
+.keypad-head { display: flex; align-items: center; gap: 10px; padding: 2px 4px 8px; min-height: 36px; }
+.keypad-target { font-weight: 700; white-space: nowrap; }
+.keypad-preview {
+  flex: 1;
+  text-align: right;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.keypad-done {
+  border: none;
+  background: transparent;
+  color: var(--accent);
+  font: inherit;
+  font-weight: 700;
+  padding: 6px 4px 6px 10px;
+  cursor: pointer;
+}
+.keypad-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+.keypad-grid button {
+  height: 52px;
+  border: none;
+  border-radius: 12px;
+  background: var(--surface-2);
+  color: var(--text);
+  font: inherit;
+  font-size: 1.45rem;
+  font-weight: 600;
+  cursor: pointer;
+  touch-action: manipulation;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-tap-highlight-color: transparent;
+  transition: transform 0.06s ease, filter 0.06s ease;
+}
+.keypad-grid button:active { transform: scale(0.96); filter: brightness(0.9); }
+.keypad-grid .fn { color: var(--muted); font-size: 1.25rem; }
+.keypad-grid .op { background: color-mix(in srgb, var(--accent) 16%, var(--surface-2)); color: var(--accent); }
+.keypad-grid .equals { background: var(--accent); color: var(--accent-contrast); }
+
+/* Leave room so the last rows can scroll above the keypad. */
+body.keypad-open main { padding-bottom: calc(var(--keypad-h, 360px) + 8px); }
+body.keypad-open .footer { display: none; }
+
+@media (max-height: 680px) {
+  .keypad-grid button { height: 44px; font-size: 1.3rem; }
+  .keypad-grid { gap: 6px; }
+}
 
 .empty { padding: 32px 16px; text-align: center; color: var(--muted); }
 
