@@ -542,7 +542,7 @@ function setupPullToRefresh() {
     setPull(pull);
   }, { passive: true });
 
-  const end = async () => {
+  const end = () => {
     if (startY === null) return;
     startY = null;
     if (pull < PULL_THRESHOLD) {
@@ -551,10 +551,10 @@ function setupPullToRefresh() {
     }
     ptrEl.classList.add("refreshing");
     setPull(PULL_THRESHOLD, true);
-    // Keep the spinner visible briefly so the refresh is noticeable even when the server is fast.
-    await Promise.all([refreshRates(), new Promise((r) => setTimeout(r, 500))]);
-    ptrEl.classList.remove("refreshing");
-    setPull(0, true);
+    // Full reload, like reopening the app: picks up a newly deployed version as well as fresh
+    // rates (the service worker fetches from the network first; preferences are already saved).
+    if (activeInput) activeInput.blur();
+    location.reload();
   };
   window.addEventListener("touchend", end);
   window.addEventListener("touchcancel", end);
@@ -600,6 +600,9 @@ async function init() {
   // Re-fetch whenever the app comes back to the foreground or is restored from the back/forward cache.
   document.addEventListener("visibilitychange", () => {
     if (document.visibilityState === "visible") refreshRates();
+    // Finish editing when the app goes to the background. Otherwise the OS restores focus to the
+    // field on return and opens the device keyboard, which ignores inputmode="none" in that case.
+    else if (activeInput) activeInput.blur();
   });
   window.addEventListener("pageshow", (e) => {
     if (e.persisted) refreshRates();
