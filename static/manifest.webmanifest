@@ -2,7 +2,7 @@
   "name": "Currency Converter",
   "short_name": "FX",
   "description": "Fast currency converter with near real-time FX rates.",
-  "id": "./",
+  "id": "currency-converter",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",
