@@ -1,0 +1,94 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#f6f7fb">
+  <title>Page not found · Currency Converter</title>
+  <script>
+    (function () {
+      try {
+        var theme = JSON.parse(localStorage.getItem("cc.prefs") || "{}").theme || "system";
+        if (theme === "system") theme = matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+        document.documentElement.dataset.theme = theme;
+      } catch (e) {}
+    })();
+  </script>
+  <style>
+    :root, [data-theme="light"] {
+      color-scheme: light;
+      --bg: #f6f7fb;
+      --surface: #fff;
+      --text: #14161f;
+      --muted: #646b80;
+      --border: #e1e4ee;
+      --accent: #2f6df6;
+      --accent-contrast: #fff;
+      --focus: rgba(47, 109, 246, .35);
+      --shadow: 0 1px 2px rgba(20, 22, 31, .06), 0 4px 16px rgba(20, 22, 31, .05);
+    }
+    [data-theme="dark"] {
+      color-scheme: dark;
+      --bg: #0f1117;
+      --surface: #181b24;
+      --text: #e9ebf2;
+      --muted: #9198ad;
+      --border: #2a2f3e;
+      --accent: #5b8cff;
+      --accent-contrast: #0f1117;
+      --focus: rgba(91, 140, 255, .4);
+      --shadow: 0 1px 2px rgba(0, 0, 0, .4), 0 4px 16px rgba(0, 0, 0, .25);
+    }
+    * { box-sizing: border-box; }
+    html, body { margin: 0; min-height: 100%; }
+    body {
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
+      background: var(--bg);
+      color: var(--text);
+      font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    }
+    header { width: 100%; max-width: 640px; margin: 0 auto; padding: 16px 20px; }
+    header span { font-size: 1.25rem; font-weight: 700; }
+    main { flex: 1; display: grid; place-items: center; width: 100%; padding: 16px; }
+    .card {
+      width: min(100%, 440px);
+      padding: 36px 28px;
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      background: var(--surface);
+      box-shadow: var(--shadow);
+      text-align: center;
+    }
+    .code { margin: 0 0 8px; color: var(--accent); font-size: 3.5rem; font-weight: 700; line-height: 1; }
+    h1 { margin: 0 0 10px; font-size: 1.5rem; }
+    p { margin: 0 0 24px; color: var(--muted); line-height: 1.5; }
+    a {
+      display: inline-block;
+      padding: 10px 16px;
+      border: 1px solid var(--accent);
+      border-radius: 10px;
+      background: var(--accent);
+      color: var(--accent-contrast);
+      font-size: .9rem;
+      font-weight: 600;
+      text-decoration: none;
+    }
+    a:hover { filter: brightness(1.05); }
+    a:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
+  </style>
+</head>
+<body>
+  <header><span>Currency Converter</span></header>
+  <main>
+    <div class="card">
+      <div class="code" aria-hidden="true">404</div>
+      <h1>Page not found</h1>
+      <p>We couldn’t find the page you were looking for.</p>
+      <a href="/">Back to converter</a>
+    </div>
+  </main>
+</body>
+</html>

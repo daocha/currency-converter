@@ -3,7 +3,7 @@ import re
 
 from fastapi.testclient import TestClient
 
-from app.main import STATIC_DIR, VERSIONED_ASSETS, app
+from app.main import BasePathMiddleware, STATIC_DIR, VERSIONED_ASSETS, app
 
 client = TestClient(app)  # no `with`: skips the lifespan, so no network fetches
 
@@ -29,6 +29,21 @@ def test_versioned_asset_urls_are_served():
     html = client.get("/").text
     for url in re.findall(r'(?:href|src)="((?:styles\.css|calc\.js|i18n\.js|app\.js)\?v=\w+)"', html):
         assert client.get("/" + url).status_code == 200
+
+
+def test_unknown_paths_render_404_page():
+    for path in ("/missing", "/nested/missing", "/missing.css"):
+        response = client.get(path)
+        assert response.status_code == 404
+        assert "Page not found" in response.text
+        assert 'href="/"' in response.text
+
+
+def test_404_page_links_to_subpath_home():
+    scoped_client = TestClient(BasePathMiddleware(app, "/fx"))
+    response = scoped_client.get("/fx/nested/missing")
+    assert response.status_code == 404
+    assert 'href="/fx/"' in response.text
 
 
 def test_history_rejects_bad_params():
