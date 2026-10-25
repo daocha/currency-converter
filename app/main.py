@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import hashlib
+import html
 import logging
 import mimetypes
 import os
@@ -87,7 +88,12 @@ class BasePathMiddleware:
                 return
             if path.startswith(self.base_path + "/"):
                 stripped = path[len(self.base_path):]
-                scope = dict(scope, path=stripped, raw_path=stripped.encode("latin-1"))
+                scope = dict(
+                    scope,
+                    path=stripped,
+                    raw_path=stripped.encode("latin-1"),
+                    state={**scope.get("state", {}), "home_path": self.base_path + "/"},
+                )
         await self.app(scope, receive, send)
 
 
@@ -195,4 +201,11 @@ async def service_worker():
     return FileResponse(STATIC_DIR / "sw.js", media_type="application/javascript", headers={"Cache-Control": "no-cache"})
 
 
-app.mount("/", StaticFiles(directory=STATIC_DIR, html=True), name="static")
+@app.exception_handler(404)
+async def not_found(request: Request, exc):
+    home_path = html.escape(request.scope.get("state", {}).get("home_path", "/"), quote=True)
+    page = (STATIC_DIR / "404.html").read_text(encoding="utf-8")
+    return HTMLResponse(page.replace('href="/"', f'href="{home_path}"'), status_code=404)
+
+
+app.mount("/", StaticFiles(directory=STATIC_DIR), name="static")
