@@ -87,8 +87,27 @@
       <div class="code" aria-hidden="true">404</div>
       <h1>Page not found</h1>
       <p>We couldn’t find the page you were looking for.</p>
-      <a href="/">Back to converter</a>
+      <a id="home-link" href="./">Back to converter</a>
     </div>
   </main>
+  <script>
+    // A proxy may strip the app's prefix before the request reaches the server.
+    // Find the nearest parent serving this app's manifest using the browser URL.
+    (async function () {
+      var link = document.getElementById("home-link");
+      var directory = new URL(".", location.href);
+      while (true) {
+        try {
+          var response = await fetch(new URL("manifest.webmanifest", directory));
+          if (response.ok && (await response.json()).id === "currency-converter") {
+            link.href = directory.href;
+            return;
+          }
+        } catch (e) {}
+        if (directory.pathname === "/") return;
+        directory = new URL("..", directory);
+      }
+    })();
+  </script>
 </body>
 </html>

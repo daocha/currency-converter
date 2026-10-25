@@ -203,9 +203,9 @@ async def service_worker():
 
 @app.exception_handler(404)
 async def not_found(request: Request, exc):
-    home_path = html.escape(request.scope.get("state", {}).get("home_path", "/"), quote=True)
+    home_path = html.escape(request.scope.get("state", {}).get("home_path", "./"), quote=True)
     page = (STATIC_DIR / "404.html").read_text(encoding="utf-8")
-    return HTMLResponse(page.replace('href="/"', f'href="{home_path}"'), status_code=404)
+    return HTMLResponse(page.replace('href="./"', f'href="{home_path}"'), status_code=404)
 
 
 app.mount("/", StaticFiles(directory=STATIC_DIR), name="static")
