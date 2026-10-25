@@ -1,5 +1,6 @@
 import hashlib
 import re
+from urllib.parse import urljoin
 
 from fastapi.testclient import TestClient
 
@@ -36,7 +37,14 @@ def test_unknown_paths_render_404_page():
         response = client.get(path)
         assert response.status_code == 404
         assert "Page not found" in response.text
-        assert 'href="/"' in response.text
+        assert 'href="./"' in response.text
+
+
+def test_404_page_link_works_when_proxy_strips_prefix():
+    response = client.get("/test")  # /fx/test is forwarded as /test
+    assert response.status_code == 404
+    link = re.search(r'id="home-link" href="([^"]+)"', response.text).group(1)
+    assert urljoin("https://dcha.xyz/fx/test", link) == "https://dcha.xyz/fx/"
 
 
 def test_404_page_links_to_subpath_home():
