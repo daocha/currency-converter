@@ -1,8 +1,10 @@
 import asyncio
+import logging
 
+import httpx
 import pytest
 
-from app.rates import RateService
+from app.rates import FRANKFURTER_URL, RateService, fetch_frankfurter, select_fetchers
 
 
 def run(coro):
@@ -18,6 +20,32 @@ def make_fetcher(values, calls=None, fail=False):
         return {c: v for c, v in values.items() if c in codes}
 
     return fetcher
+
+
+def test_frankfurter_fetches_usd_rates_and_ignores_unrequested_rows():
+    def respond(request):
+        assert str(request.url).startswith(FRANKFURTER_URL)
+        assert request.url.params["base"] == "USD"
+        assert "quotes" not in request.url.params
+        return httpx.Response(200, json=[
+            {"date": "2026-10-26", "base": "USD", "quote": "EUR", "rate": 0.92},
+            {"date": "2026-10-26", "base": "USD", "quote": "JPY", "rate": 0},
+            {"date": "2026-10-26", "base": "USD", "quote": "GBP", "rate": 0.8},
+        ])
+
+    async def scenario():
+        async with httpx.AsyncClient(transport=httpx.MockTransport(respond)) as client:
+            return await fetch_frankfurter(client, ["USD", "EUR", "JPY"])
+
+    assert run(scenario()) == {"EUR": 0.92}
+
+
+def test_configured_source_is_first_with_fallbacks():
+    assert [name for name, _ in select_fetchers()] == ["yahoo", "frankfurter", "open.er-api"]
+    assert [name for name, _ in select_fetchers("frankfurter")] == ["frankfurter", "yahoo", "open.er-api"]
+    assert [name for name, _ in select_fetchers("open.er-api")] == ["open.er-api", "yahoo", "frankfurter"]
+    with pytest.raises(ValueError, match="unknown FX_SOURCE"):
+        select_fetchers("unknown")
 
 
 def test_primary_then_fallback_fills_missing():
@@ -38,6 +66,22 @@ def test_primary_then_fallback_fills_missing():
     assert snap.sources == {"USD": "fixed", "EUR": "primary", "JPY": "fallback"}
     assert calls == [["JPY", "XYZ"]]  # fallback only asked for what was missing
     assert snap.expires_at - snap.fetched_at == 300
+
+
+def test_refresh_log_names_sources_and_counts(caplog):
+    async def scenario():
+        svc = RateService(
+            ["USD", "EUR", "JPY"], client=None,
+            fetchers=[
+                ("frankfurter", make_fetcher({"EUR": 0.9})),
+                ("yahoo", make_fetcher({"JPY": 150.0})),
+            ],
+        )
+        await svc.refresh()
+
+    with caplog.at_level(logging.INFO, logger="app.rates"):
+        run(scenario())
+    assert "sources: frankfurter=1, yahoo=1" in caplog.text
 
 
 def test_failed_source_is_skipped_and_previous_values_kept():

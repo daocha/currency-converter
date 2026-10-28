@@ -17,7 +17,7 @@ A small currency converter web app with near-real-time FX rates and history char
 ## 🧱 How it works
 
 - **Backend:** Python / FastAPI. It caches rates in memory and refreshes them in the background *before* the cache expires.
-- **Rates:** [Yahoo Finance](https://finance.yahoo.com) quotes (`XXX=X` pairs) are the primary source. For any currency Yahoo doesn't return, the app falls back to the free [ExchangeRate-API open endpoint](https://www.exchangerate-api.com/docs/free) (no key needed). If both fail, it keeps serving the last good rates.
+- **Rates:** [Yahoo Finance](https://finance.yahoo.com) quotes (`XXX=X` pairs) are the default source for live conversions. Set `FX_SOURCE` to choose another primary source. Missing currencies are filled from the other sources ([Frankfurter](https://frankfurter.dev/), daily official rates, and the free [ExchangeRate-API open endpoint](https://www.exchangerate-api.com/docs/free)); the last good rates are kept if none has a new value. The backend logs the source and currency count on each cache refresh.
 - **History:** stored in a local SQLite database (see [Chart history](#-chart-history)).
 - **Frontend:** plain HTML/CSS/JS with no build step.
 
@@ -26,6 +26,7 @@ A small currency converter web app with near-real-time FX rates and history char
 ```bash
 ./start.sh                 # http://localhost:8000, auto-reload
 PORT=9000 CACHE_TTL_SECONDS=900 ./start.sh
+FX_SOURCE=frankfurter ./start.sh
 ```
 
 `start.sh` creates `.venv`, installs `requirements-dev.txt`, and runs uvicorn with `--reload`.
@@ -41,7 +42,7 @@ node --test tests/              # calculator (static/calc.js)
 
 ```bash
 docker compose up -d --build
-# or: CACHE_TTL_SECONDS=900 PORT=8080 docker compose up -d --build
+# or: FX_SOURCE=frankfurter CACHE_TTL_SECONDS=900 PORT=8080 docker compose up -d --build
 ```
 
 The chart history is kept in a Docker **named volume** (`fx-data`, mounted at `/data`). It is managed by Docker, so you won't see a folder in the project, and it survives rebuilds and `docker compose down`. `docker compose down -v` deletes it, and the history is then fetched again from Yahoo on the next start.
@@ -50,9 +51,10 @@ The chart history is kept in a Docker **named volume** (`fx-data`, mounted at `/
 
 | Env var | Default | Meaning |
 | --- | --- | --- |
+| `FX_SOURCE` | `yahoo` | Preferred live-rate source: `yahoo`, `frankfurter`, or `open.er-api`. Remaining sources fill missing currencies. Restart the server after changing it. |
 | `CACHE_TTL_SECONDS` | `300` | How long fetched rates stay valid (e.g. 300 = 5 min, 900 = 15 min). |
 | `REFRESH_MARGIN_SECONDS` | 20% of TTL, max 60 | How many seconds before expiry the background task refetches. |
-| `LOG_LEVEL` | `warning` | Log verbosity. Only errors and failed sources are logged by default; set `debug` to see each refresh. HTTP access logs are disabled. |
+| `LOG_LEVEL` | `info` | Log verbosity. Each successful rate refresh logs the actual sources and currency counts; failures also log warnings. HTTP access logs are disabled. |
 | `HISTORY_DB` | `data/history.db` (`/data/history.db` in Docker) | SQLite file holding the stored FX history used by the charts. Mount a volume on its directory. |
 | `PORT` | `8000` | HTTP port. |
 | `BASE_PATH` | *(empty)* | Optional sub-path such as `/fx`. Only needed if your proxy forwards `/fx/...` **without** stripping the prefix. The app keeps serving `/` either way. |
