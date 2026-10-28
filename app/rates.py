@@ -7,7 +7,9 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import math
 import time
+from collections import Counter
 from dataclasses import dataclass
 from typing import Awaitable, Callable, Dict, List, Optional, Sequence, Tuple
 
@@ -17,6 +19,7 @@ log = logging.getLogger(__name__)
 
 YAHOO_CHART_URL = "https://query1.finance.yahoo.com/v8/finance/chart/{symbol}"
 OPEN_ER_URL = "https://open.er-api.com/v6/latest/USD"
+FRANKFURTER_URL = "https://api.frankfurter.dev/v2/rates"
 
 Fetcher = Callable[[httpx.AsyncClient, Sequence[str]], Awaitable[Dict[str, float]]]
 
@@ -58,10 +61,40 @@ async def fetch_open_er(client: httpx.AsyncClient, codes: Sequence[str]) -> Dict
     return {c: float(rates[c]) for c in codes if c in rates and float(rates[c]) > 0}
 
 
-DEFAULT_FETCHERS: List[Tuple[str, Fetcher]] = [
+async def fetch_frankfurter(client: httpx.AsyncClient, codes: Sequence[str]) -> Dict[str, float]:
+    """Daily USD-based rates from Frankfurter's v2 batch endpoint."""
+    wanted = {code for code in codes if code != "USD"}
+    if not wanted:
+        return {}
+    # Request all available quotes: an unsupported requested code can reject the whole batch.
+    resp = await client.get(FRANKFURTER_URL, params={"base": "USD"})
+    resp.raise_for_status()
+    rows = resp.json()
+    if not isinstance(rows, list):
+        raise ValueError("unexpected Frankfurter rates response")
+    result: Dict[str, float] = {}
+    for row in rows:
+        if row.get("base") != "USD" or row.get("quote") not in wanted:
+            continue
+        value = float(row["rate"])
+        if math.isfinite(value) and value > 0:
+            result[row["quote"]] = value
+    return result
+
+
+AVAILABLE_FETCHERS: List[Tuple[str, Fetcher]] = [
     ("yahoo", fetch_yahoo),
+    ("frankfurter", fetch_frankfurter),
     ("open.er-api", fetch_open_er),
 ]
+
+
+def select_fetchers(primary: str = "yahoo") -> List[Tuple[str, Fetcher]]:
+    """Try the configured source first, then use the others for missing currencies."""
+    names = {name for name, _ in AVAILABLE_FETCHERS}
+    if primary not in names:
+        raise ValueError(f"unknown FX_SOURCE {primary!r}; choose from {', '.join(sorted(names))}")
+    return sorted(AVAILABLE_FETCHERS, key=lambda item: item[0] != primary)
 
 
 @dataclass
@@ -96,7 +129,7 @@ class RateService:
         # Default: refresh 20% of the TTL early, capped at 60s (5 min TTL -> refresh at 4 min).
         self.refresh_margin = min(60.0, ttl * 0.2) if refresh_margin is None else refresh_margin
         self.retry_delay = retry_delay
-        self.fetchers = fetchers if fetchers is not None else DEFAULT_FETCHERS
+        self.fetchers = fetchers if fetchers is not None else select_fetchers()
         self._snapshot: Optional[Snapshot] = None
         self._lock = asyncio.Lock()
         self._task: Optional[asyncio.Task] = None
@@ -148,10 +181,11 @@ class RateService:
 
         now = time.time()
         self._snapshot = Snapshot(rates=rates, sources=sources, fetched_at=now, expires_at=now + self.ttl)
-        log.debug(
-            "refreshed %d/%d rates in %.2fs (sources: %s)",
+        counts = Counter(source for source in sources.values() if source != "fixed")
+        log.info(
+            "refreshed %d/%d rates in %.2fs; sources: %s",
             len(rates), len(self.codes), time.monotonic() - started,
-            ", ".join(sorted(set(sources.values()))),
+            ", ".join(f"{name}={count}" for name, count in sorted(counts.items())) or "none",
         )
         return self._snapshot
 

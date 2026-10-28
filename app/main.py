@@ -17,10 +17,10 @@ from fastapi.staticfiles import StaticFiles
 
 from .currencies import CURRENCIES, DEFAULT_SELECTION
 from .history import RANGES, HistoryService, HistoryStore
-from .rates import RateService
+from .rates import RateService, select_fetchers
 
 logging.basicConfig(
-    level=os.getenv("LOG_LEVEL", "WARNING").upper(),
+    level=os.getenv("LOG_LEVEL", "INFO").upper(),
     format="%(asctime)s %(levelname)s %(name)s: %(message)s",
 )
 log = logging.getLogger("currency-converter")
@@ -28,6 +28,7 @@ logging.getLogger("httpx").setLevel(logging.WARNING)
 
 STATIC_DIR = Path(__file__).resolve().parent.parent / "static"
 CACHE_TTL_SECONDS = float(os.getenv("CACHE_TTL_SECONDS", "300"))
+FX_SOURCE = os.getenv("FX_SOURCE", "yahoo").strip().lower()
 _margin = os.getenv("REFRESH_MARGIN_SECONDS")
 REFRESH_MARGIN_SECONDS = float(_margin) if _margin else None
 # Optional sub-path (e.g. "/fx") for reverse proxies that forward /fx/... without stripping it.
@@ -53,6 +54,7 @@ async def lifespan(app: FastAPI):
             client=client,
             ttl=CACHE_TTL_SECONDS,
             refresh_margin=REFRESH_MARGIN_SECONDS,
+            fetchers=select_fetchers(FX_SOURCE),
         )
         app.state.rates = service
         history = HistoryService(list(CURRENCIES), client, HistoryStore(HISTORY_DB))

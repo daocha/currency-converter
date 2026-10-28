@@ -9,7 +9,6 @@ const FALLBACK_DEFAULTS = ["USD", "EUR", "GBP", "JPY", "CNY", "HKD"];
 const $ = (sel) => document.querySelector(sel);
 const listEl = $("#currency-list");
 const statusEl = $("#status");
-const sourceEl = $("#source");
 const editBtn = $("#edit-btn");
 const themeSelect = $("#theme-select");
 const langSelect = $("#lang-select");
@@ -219,15 +218,6 @@ function renderStatus() {
   statusEl.textContent = text;
   statusEl.classList.toggle("warn", offline || stale);
   statusEl.title = t("ratesUpdatedAt", { when: updated.toLocaleString(I18n.lang) });
-
-  const used = new Set(prefs.currencies.map((c) => ratesData.sources?.[c]).filter((s) => s && s !== "fixed"));
-  sourceEl.textContent = used.size
-    ? t("ratesVia", { sources: [...used].map(sourceLabel).join(", "), n: Math.round(ratesData.ttl / 60) })
-    : "";
-}
-
-function sourceLabel(s) {
-  return { yahoo: "Yahoo Finance", "open.er-api": "ExchangeRate-API", stale: t("srcCache") }[s] || s;
 }
 
 // ---------- actions ----------

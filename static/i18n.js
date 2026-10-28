@@ -53,8 +53,6 @@
       offlineFrom: "Offline · rates from {time}",
       mayBeOld: "may be out of date",
       ratesUpdatedAt: "Rates updated {when}",
-      ratesVia: "Rates via {sources} · refreshed every {n} min",
-      srcCache: "cache",
     },
     "zh-TW": {
       title: "匯率換算",
@@ -104,8 +102,6 @@
       offlineFrom: "離線中 · 匯率時間 {time}",
       mayBeOld: "可能已過期",
       ratesUpdatedAt: "匯率更新於 {when}",
-      ratesVia: "匯率來源：{sources} · 每 {n} 分鐘更新",
-      srcCache: "快取",
     },
   };
 
