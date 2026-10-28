@@ -100,3 +100,9 @@ The URL must end with a slash (`/fx/`) because relative URLs resolve against it.
 Browsers only allow installing a PWA from `localhost` or over **HTTPS**. In production, put the app behind a TLS-terminating reverse proxy (Caddy, nginx, Traefik, …).
 
 The server stamps `styles.css`, `calc.js`, `i18n.js` and `app.js` in `index.html` with a content-hash version (`?v=…`), so browsers load changed files automatically. Bump `VERSION` in `static/sw.js` only when you want installed clients to drop their old offline caches. To regenerate the icons, run `python scripts/generate_icons.py` (needs Pillow).
+
+## ⚠️ Disclaimer
+
+This project is not affiliated with, endorsed by, or sponsored by Yahoo. The `yahoo` source, which is the default, and the history charts use unofficial Yahoo Finance endpoints that are meant for personal use. You are responsible for following [Yahoo's Terms of Service](https://legal.yahoo.com/us/en/yahoo/terms/otos/index.html). The rates and history are provided as-is, without any guarantee of accuracy, and are not financial advice.
+
+For a public or commercial deployment, set `FX_SOURCE=frankfurter` to use a freely redistributable source, or use a provider whose licence allows redistribution. History charts always use Yahoo, whatever `FX_SOURCE` is set to.
